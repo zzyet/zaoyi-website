@@ -110,16 +110,16 @@ function GeometricParticleField() {
             p.vy += dy * force
             p.energy = Math.min(1, p.energy + 0.05)
           }
+          p.vx *= 0.99
+          p.vy *= 0.99
         }
 
         p.energy *= 0.97
-        p.vx *= 0.99
-        p.vy *= 0.99
 
-        if (p.x < 0) { p.x = 0; p.vx *= -1 }
-        if (p.x > w) { p.x = w; p.vx *= -1 }
-        if (p.y < 0) { p.y = 0; p.vy *= -1 }
-        if (p.y > h) { p.y = h; p.vy *= -1 }
+        if (p.x < -10) p.x = w + 10
+        if (p.x > w + 10) p.x = -10
+        if (p.y < -10) p.y = h + 10
+        if (p.y > h + 10) p.y = -10
       }
 
       const connDistSq = CONNECTION_DIST * CONNECTION_DIST
