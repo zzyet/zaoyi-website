@@ -49,8 +49,8 @@ function GeometricParticleField() {
     let w, h
 
     const isMobile = window.innerWidth < 768
-    const PARTICLE_COUNT = isMobile ? 60 : 120
-    const CONNECTION_DIST = isMobile ? 100 : 160
+    const PARTICLE_COUNT = isMobile ? 35 : 120
+    const CONNECTION_DIST = isMobile ? 80 : 160
     const MOUSE_RANGE = 200
     const PULSE_SPEED = 0.003
 
