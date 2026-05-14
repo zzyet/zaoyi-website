@@ -1,18 +1,58 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, createContext, useContext } from 'react'
 import { motion, useScroll, useTransform, useInView } from 'framer-motion'
 
-// ─── Neural Network Canvas Background ────────────────────────────────────────
-function ParticleCanvas() {
+// ─── Theme Context ──────────────────────────────────────────────────────────
+const ThemeContext = createContext({ theme: 'light', toggleTheme: () => {} })
+
+function useTheme() {
+  return useContext(ThemeContext)
+}
+
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('zaoyi-theme')
+    return saved || 'light'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('zaoyi-theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light')
+  }
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  )
+}
+
+// ─── Neural Network Background ─────────────────────────────────────────────
+function GeometricParticleField() {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const mouseRef = useRef({ x: -1000, y: -1000 })
   const timeRef = useRef(0)
-  const dataRef = useRef({ neurons: [], particles: [], pulses: [] })
+  const { theme } = useTheme()
+  const themeRef = useRef(theme)
+
+  useEffect(() => {
+    themeRef.current = theme
+  }, [theme])
 
   useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     let w, h
+
+    const isMobile = window.innerWidth < 768
+    const PARTICLE_COUNT = isMobile ? 60 : 120
+    const CONNECTION_DIST = isMobile ? 100 : 160
+    const MOUSE_RANGE = 200
+    const PULSE_SPEED = 0.003
 
     const resize = () => {
       w = canvas.width = window.innerWidth
@@ -21,259 +61,120 @@ function ParticleCanvas() {
     resize()
     window.addEventListener('resize', resize)
 
-    // ── Neurons (larger, glowing nodes) ──
-    const NEURON_COUNT = 25
-    const neuronColors = [
-      { fill: 'rgba(77,124,254,0.55)', glow: 'rgba(77,124,254,0.18)' },
-      { fill: 'rgba(124,58,237,0.50)', glow: 'rgba(124,58,237,0.15)' },
-      { fill: 'rgba(6,182,212,0.50)', glow: 'rgba(6,182,212,0.15)' },
-      { fill: 'rgba(139,92,246,0.45)', glow: 'rgba(139,92,246,0.14)' },
-    ]
-    dataRef.current.neurons = Array.from({ length: NEURON_COUNT }, (_, idx) => {
-      const nc = neuronColors[Math.floor(Math.random() * neuronColors.length)]
-      // Evenly distribute across the viewport with some margin
-      const cols = 5, rows = Math.ceil(NEURON_COUNT / cols)
-      const cellW = w / cols, cellH = h / rows
-      const col = idx % cols, row = Math.floor(idx / cols)
-      return {
-        x: cellW * (col + 0.5) + (Math.random() - 0.5) * cellW * 0.6,
-        y: cellH * (row + 0.5) + (Math.random() - 0.5) * cellH * 0.6,
-        vx: (Math.random() - 0.5) * 0.2,
-        vy: (Math.random() - 0.5) * 0.2,
-        r: 3 + Math.random() * 3,
-        pulsePhase: Math.random() * Math.PI * 2,
-        pulseSpeed: 0.02 + Math.random() * 0.03,
-        color: nc,
-      }
-    })
-
-    // ── Background ambient particles (small, many) ──
-    const PARTICLE_COUNT = 100
-    const particleColors = ['rgba(77,124,254,0.22)', 'rgba(124,58,237,0.18)', 'rgba(6,182,212,0.16)', 'rgba(99,102,241,0.14)']
-    dataRef.current.particles = Array.from({ length: PARTICLE_COUNT }, () => ({
+    const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.35,
-      vy: (Math.random() - 0.5) * 0.35,
-      r: Math.random() * 1.5 + 0.5,
-      color: particleColors[Math.floor(Math.random() * particleColors.length)],
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r: 1.5 + Math.random() * 2,
+      phase: Math.random() * Math.PI * 2,
+      pulseSpeed: 0.5 + Math.random() * 1.5,
+      energy: 0,
     }))
 
-    // ── Signal pulses traveling along connections ──
-    dataRef.current.pulses = []
+    const getThemeColors = (currentTheme) => {
+      const isDark = currentTheme === 'dark'
+      return {
+        bg: isDark ? '#0f0f1a' : '#f8f8fc',
+        node: isDark
+          ? ['rgba(124,92,255,0.8)', 'rgba(34,211,238,0.7)', 'rgba(168,85,247,0.7)']
+          : ['rgba(124,92,255,0.6)', 'rgba(34,211,238,0.5)', 'rgba(168,85,247,0.5)'],
+        line: isDark ? [124, 92, 255] : [124, 92, 255],
+        glow: isDark ? 'rgba(124,92,255,0.4)' : 'rgba(124,92,255,0.2)',
+        pulse: isDark ? [34, 211, 238] : [6, 182, 212],
+      }
+    }
 
     const animate = () => {
       timeRef.current += 1
-      ctx.clearRect(0, 0, w, h)
+      const t = timeRef.current * PULSE_SPEED
+      const colors = getThemeColors(themeRef.current)
 
-      const { neurons, particles, pulses } = dataRef.current
+      ctx.fillStyle = colors.bg
+      ctx.fillRect(0, 0, w, h)
+
       const mx = mouseRef.current.x
       const my = mouseRef.current.y
-      const t = timeRef.current * 0.016
 
-      // ── Draw & update ambient particles ──
       for (const p of particles) {
         p.x += p.vx
         p.y += p.vy
-        if (p.x < -10) p.x = w + 10
-        if (p.x > w + 10) p.x = -10
-        if (p.y < -10) p.y = h + 10
-        if (p.y > h + 10) p.y = -10
 
-        ctx.beginPath()
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
-        ctx.fillStyle = p.color
-        ctx.fill()
-      }
-
-      // ── Update neurons ──
-      // Compute neuron-neuron repulsion to prevent clustering
-      for (let i = 0; i < neurons.length; i++) {
-        const n = neurons[i]
-        for (let j = i + 1; j < neurons.length; j++) {
-          const m = neurons[j]
-          const dx = n.x - m.x
-          const dy = n.y - m.y
+        if (mx > 0 && my > 0) {
+          const dx = mx - p.x
+          const dy = my - p.y
           const dist = Math.sqrt(dx * dx + dy * dy)
-          const MIN_DIST = 80
-          if (dist < MIN_DIST && dist > 0) {
-            const force = 0.015 * (1 - dist / MIN_DIST)
-            const fx = (dx / dist) * force
-            const fy = (dy / dist) * force
-            n.vx += fx
-            n.vy += fy
-            m.vx -= fx
-            m.vy -= fy
+          if (dist < MOUSE_RANGE) {
+            const force = (1 - dist / MOUSE_RANGE) * 0.02
+            p.vx += dx * force
+            p.vy += dy * force
+            p.energy = Math.min(1, p.energy + 0.05)
           }
         }
+
+        p.energy *= 0.97
+        p.vx *= 0.99
+        p.vy *= 0.99
+
+        if (p.x < 0) { p.x = 0; p.vx *= -1 }
+        if (p.x > w) { p.x = w; p.vx *= -1 }
+        if (p.y < 0) { p.y = 0; p.vy *= -1 }
+        if (p.y > h) { p.y = h; p.vy *= -1 }
       }
 
-      for (const n of neurons) {
-        // Mouse attraction — gentle pull toward cursor
-        const dx = mx - n.x
-        const dy = my - n.y
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        const MOUSE_RANGE = 200
-        if (dist < MOUSE_RANGE && dist > 1) {
-          const force = 0.025 * (1 - dist / MOUSE_RANGE)
-          n.vx += (dx / dist) * force
-          n.vy += (dy / dist) * force
-        }
-
-        // Small random jitter to keep movement alive
-        n.vx += (Math.random() - 0.5) * 0.04
-        n.vy += (Math.random() - 0.5) * 0.04
-
-        n.x += n.vx
-        n.y += n.vy
-
-        // Strong damping
-        n.vx *= 0.94
-        n.vy *= 0.94
-
-        // Clamp speed
-        const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy)
-        const MAX_SPEED = 0.8
-        if (speed > MAX_SPEED) {
-          n.vx = (n.vx / speed) * MAX_SPEED
-          n.vy = (n.vy / speed) * MAX_SPEED
-        }
-
-        // Wrap around edges with margin
-        const margin = 40
-        if (n.x < margin) { n.x = margin; n.vx *= -0.5 }
-        if (n.x > w - margin) { n.x = w - margin; n.vx *= -0.5 }
-        if (n.y < margin) { n.y = margin; n.vy *= -0.5 }
-        if (n.y > h - margin) { n.y = h - margin; n.vy *= -0.5 }
-      }
-
-      // ── Draw neural connections ──
-      const CONNECTION_DIST = 220
-      const drawnPairs = new Set()
-
-      for (let i = 0; i < neurons.length; i++) {
-        const a = neurons[i]
-        for (let j = i + 1; j < neurons.length; j++) {
-          const b = neurons[j]
+      const connDistSq = CONNECTION_DIST * CONNECTION_DIST
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const a = particles[i]
+          const b = particles[j]
           const dx = a.x - b.x
           const dy = a.y - b.y
-          const d = Math.sqrt(dx * dx + dy * dy)
-          if (d < CONNECTION_DIST) {
-            let alpha = 0.14 * (1 - d / CONNECTION_DIST)
-            const midX = (a.x + b.x) / 2
-            const midY = (a.y + b.y) / 2
-            // Boost alpha for connections near mouse (spotlight effect)
-            const mouseDist = Math.sqrt((midX - mx) ** 2 + (midY - my) ** 2)
-            if (mouseDist < 250) alpha = Math.min(0.35, alpha + 0.15 * (1 - mouseDist / 250))
+          const distSq = dx * dx + dy * dy
 
-            // Glow line behind
+          if (distSq < connDistSq) {
+            const dist = Math.sqrt(distSq)
+            const alpha = (1 - dist / CONNECTION_DIST) * 0.35
+            const energy = Math.max(a.energy, b.energy)
+
+            const r = colors.line[0] + (colors.pulse[0] - colors.line[0]) * energy
+            const g = colors.line[1] + (colors.pulse[1] - colors.line[1]) * energy
+            const bl = colors.line[2] + (colors.pulse[2] - colors.line[2]) * energy
+
             ctx.beginPath()
             ctx.moveTo(a.x, a.y)
             ctx.lineTo(b.x, b.y)
-            ctx.strokeStyle = `rgba(77,124,254,${alpha * 0.5})`
-            ctx.lineWidth = 2.5
+            ctx.strokeStyle = `rgba(${r|0},${g|0},${bl|0},${alpha})`
+            ctx.lineWidth = 0.5 + energy * 1.5
             ctx.stroke()
 
-            // Core line
-            ctx.beginPath()
-            ctx.moveTo(a.x, a.y)
-            ctx.lineTo(b.x, b.y)
-            ctx.strokeStyle = `rgba(77,124,254,${alpha})`
-            ctx.lineWidth = 0.8
-            ctx.stroke()
-
-            // Data pulse management
-            const pairKey = `${Math.min(i, j)}-${Math.max(i, j)}`
-            if (!drawnPairs.has(pairKey)) {
-              drawnPairs.add(pairKey)
-              // Find or create pulse for this pair
-              let pulse = pulses.find(p => p.pair === pairKey)
-              if (!pulse) {
-                pulse = {
-                  pair: pairKey,
-                  a: i, b: j,
-                  progress: Math.random(),
-                  speed: 0.003 + Math.random() * 0.006,
-                  color: Math.random() > 0.5 ? 'rgba(77,124,254,0.9)' : 'rgba(6,182,212,0.85)',
-                }
-                pulses.push(pulse)
-              }
+            if (energy > 0.3) {
+              const pulsePos = (Math.sin(t * 3 + a.phase) + 1) * 0.5
+              const px = a.x + (b.x - a.x) * pulsePos
+              const py = a.y + (b.y - a.y) * pulsePos
+              ctx.beginPath()
+              ctx.arc(px, py, 1.5 * energy, 0, Math.PI * 2)
+              ctx.fillStyle = `rgba(${colors.pulse[0]},${colors.pulse[1]},${colors.pulse[2]},${energy * 0.8})`
+              ctx.fill()
             }
           }
         }
       }
 
-      // Clean up stale pulses
-      for (let k = pulses.length - 1; k >= 0; k--) {
-        const p = pulses[k]
-        if (p.a >= neurons.length || p.b >= neurons.length) {
-          pulses.splice(k, 1)
-          continue
+      for (const p of particles) {
+        const breathR = p.r + Math.sin(t * p.pulseSpeed + p.phase) * 0.8
+        const glowR = breathR + 3 + p.energy * 6
+
+        if (p.energy > 0.1 || breathR > 2.5) {
+          ctx.beginPath()
+          ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2)
+          ctx.fillStyle = `rgba(${colors.pulse[0]},${colors.pulse[1]},${colors.pulse[2]},${0.05 + p.energy * 0.15})`
+          ctx.fill()
         }
-        p.progress += p.speed
-        if (p.progress > 1) p.progress = 0
 
-        const a = neurons[p.a]
-        const b = neurons[p.b]
-        const px = a.x + (b.x - a.x) * p.progress
-        const py = a.y + (b.y - a.y) * p.progress
-
-        // Pulse glow
-        const gradient = ctx.createRadialGradient(px, py, 0, px, py, 6)
-        gradient.addColorStop(0, p.color)
-        gradient.addColorStop(0.4, p.color.replace('0.9', '0.4').replace('0.85', '0.35'))
-        gradient.addColorStop(1, 'transparent')
         ctx.beginPath()
-        ctx.arc(px, py, 6, 0, Math.PI * 2)
-        ctx.fillStyle = gradient
-        ctx.fill()
-
-        //Core dot
-        ctx.beginPath()
-        ctx.arc(px, py, 1.8, 0, Math.PI * 2)
-        ctx.fillStyle = '#fff'
-        ctx.fill()
-      }
-
-      // Limit pulse count
-      if (pulses.length > 80) pulses.splice(0, pulses.length - 80)
-
-      // ── Draw neurons with glow ──
-      for (const n of neurons) {
-        const pulseR = n.r + Math.sin(t * n.pulseSpeed + n.pulsePhase) * 2
-
-        // Mouse proximity boost — bigger & brighter near cursor
-        const nDx = mx - n.x
-        const nDy = my - n.y
-        const nDist = Math.sqrt(nDx * nDx + nDy * nDy)
-        const mouseBoost = nDist < 200 ? (1 - nDist / 200) : 0
-        const glowRadius = pulseR * (4 + mouseBoost * 5)
-        const glowAlpha = Math.min(0.4, 0.18 + mouseBoost * 0.25)
-
-        // Outer glow
-        const glow = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, glowRadius)
-        glow.addColorStop(0, n.color.glow.replace(/0\.\d+/, String(glowAlpha)))
-        glow.addColorStop(1, 'transparent')
-        ctx.beginPath()
-        ctx.arc(n.x, n.y, glowRadius, 0, Math.PI * 2)
-        ctx.fillStyle = glow
-        ctx.fill()
-
-        // Mid ring
-        ctx.beginPath()
-        ctx.arc(n.x, n.y, pulseR + 2, 0, Math.PI * 2)
-        ctx.strokeStyle = n.color.fill.replace('0.55', '0.2').replace('0.50', '0.18')
-        ctx.lineWidth = 1
-        ctx.stroke()
-
-        // Core neuron
-        const coreGrad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, pulseR)
-        coreGrad.addColorStop(0, '#ffffff')
-        coreGrad.addColorStop(0.5, n.color.fill)
-        coreGrad.addColorStop(1, 'transparent')
-        ctx.beginPath()
-        ctx.arc(n.x, n.y, pulseR, 0, Math.PI * 2)
-        ctx.fillStyle = coreGrad
+        ctx.arc(p.x, p.y, breathR, 0, Math.PI * 2)
+        const colorIdx = Math.floor(p.phase) % 3
+        ctx.fillStyle = colors.node[colorIdx]
         ctx.fill()
       }
 
@@ -283,12 +184,15 @@ function ParticleCanvas() {
     animate()
 
     const onMouse = (e) => { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY }
+    const onMouseLeave = () => { mouseRef.current.x = -1000; mouseRef.current.y = -1000 }
     window.addEventListener('mousemove', onMouse)
+    window.addEventListener('mouseleave', onMouseLeave)
 
     return () => {
       cancelAnimationFrame(animRef.current)
       window.removeEventListener('resize', resize)
       window.removeEventListener('mousemove', onMouse)
+      window.removeEventListener('mouseleave', onMouseLeave)
     }
   }, [])
 
@@ -298,30 +202,10 @@ function ParticleCanvas() {
       style={{
         position: 'fixed',
         top: 0, left: 0,
-        zIndex: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: -1,
         pointerEvents: 'none',
-      }}
-    />
-  )
-}
-
-// ─── Tech Grid Overlay (CSS) ─────────────────────────────────────────────────
-function GridOverlay() {
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0, left: 0, right: 0, bottom: 0,
-        zIndex: 0,
-        pointerEvents: 'none',
-        opacity: 0.25,
-        backgroundImage: `
-          linear-gradient(rgba(77,124,254,0.06) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(77,124,254,0.06) 1px, transparent 1px)
-        `,
-        backgroundSize: '60px 60px',
-        maskImage: 'radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 70%)',
-        WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 70%)',
       }}
     />
   )
@@ -356,6 +240,33 @@ function ScrollReveal({ children, direction = 'up', delay = 0, className = '' })
     >
       {children}
     </motion.div>
+  )
+}
+
+// ─── Theme Toggle Button ────────────────────────────────────────────────────
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme()
+
+  return (
+    <button
+      className="theme-toggle"
+      onClick={toggleTheme}
+      aria-label={theme === 'light' ? '切换暗色模式' : '切换亮色模式'}
+    >
+      {theme === 'light' ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      )}
+    </button>
   )
 }
 
@@ -396,6 +307,7 @@ function Navbar() {
           <li><a href="#github" onClick={() => setMenuOpen(false)}>开源</a></li>
           <li><a href="#cta" onClick={() => setMenuOpen(false)}>联系</a></li>
         </ul>
+        <ThemeToggle />
       </div>
     </nav>
   )
@@ -473,7 +385,7 @@ function Hero() {
         position: 'absolute', top: '-20%', right: '-10%',
         width: '60vw', height: '60vw', maxWidth: 700, maxHeight: 700,
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(77,124,254,0.08) 0%, rgba(6,182,212,0.04) 40%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(124,92,255,0.15) 0%, rgba(34,211,238,0.08) 40%, transparent 70%)',
         pointerEvents: 'none',
         filter: 'blur(40px)',
       }} />
@@ -481,7 +393,7 @@ function Hero() {
         position: 'absolute', bottom: '-10%', left: '-5%',
         width: '40vw', height: '40vw', maxWidth: 500, maxHeight: 500,
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(124,58,237,0.07) 0%, rgba(77,124,254,0.03) 50%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(168,85,247,0.12) 0%, rgba(124,92,255,0.06) 50%, transparent 70%)',
         pointerEvents: 'none',
         filter: 'blur(40px)',
       }} />
@@ -525,7 +437,7 @@ function Pipeline() {
                 {/* Right: card */}
                 <div className="card" style={{ flex: 1, maxWidth: 600, marginBottom: i < pipelineSteps.length - 1 ? 20 : 0 }}>
                   <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{item.title}</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: 15, marginBottom: 12, lineHeight: 1.7 }}>
+                  <p style={{ color: 'var(--text-body)', fontSize: 15, marginBottom: 12, lineHeight: 1.7 }}>
                     {item.desc}
                   </p>
                   <span style={{
@@ -533,8 +445,8 @@ function Pipeline() {
                     alignItems: 'center',
                     gap: 6,
                     fontSize: 13,
-                    color: 'var(--accent2)',
-                    background: 'var(--accent2-light)',
+                    color: 'var(--violet)',
+                    background: 'rgba(168,85,247,0.10)',
                     padding: '4px 12px',
                     borderRadius: 100
                   }}>
@@ -558,7 +470,7 @@ function Pipeline() {
 const advantages = [
   { number: '10×', label: '开发速度提升', desc: 'AI 并行处理需求、设计、编码、测试，交付周期从天缩短到小时', color: 'var(--accent)' },
   { number: '92%', label: '缺陷率降低', desc: 'AI 全维度自动测试与智能代码审查，在源头拦截缺陷', color: 'var(--teal)' },
-  { number: '60%', label: '开发成本降低', desc: '减少重复性人工投入，团队聚焦高价值创意与决策', color: 'var(--accent2)' },
+  { number: '60%', label: '开发成本降低', desc: '减少重复性人工投入，团队聚焦高价值创意与决策', color: 'var(--violet)' },
 ]
 
 function AdvantageCards() {
@@ -592,7 +504,7 @@ function AdvantageCards() {
                 <h3 style={{ fontSize: 18, fontWeight: 700, marginTop: 12, marginBottom: 8 }}>
                   {item.label}
                 </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.7 }}>
+                <p style={{ color: 'var(--text-body)', fontSize: 14, lineHeight: 1.7 }}>
                   {item.desc}
                 </p>
               </motion.div>
@@ -617,7 +529,7 @@ const values = [
   },
   {
     icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s-8-4.5-8-11.8V3l8-1.5L20 3v7.2C20 17.5 12 22 12 22z"/>
         <path d="M9 12l2 2 4-4"/>
       </svg>
@@ -648,7 +560,7 @@ const values = [
 ]
 
 function ValueProps() {
-  const iconColors = [bg => ({ background: 'var(--accent-light)' }), bg => ({ background: 'rgba(124,58,237,0.08)' }), bg => ({ background: 'rgba(6,182,212,0.08)' }), bg => ({ background: 'rgba(245,158,11,0.08)' })]
+  const iconColors = [() => ({ background: 'rgba(124,92,255,0.12)' }), () => ({ background: 'rgba(168,85,247,0.12)' }), () => ({ background: 'rgba(34,211,238,0.12)' }), () => ({ background: 'rgba(245,158,11,0.12)' })]
   return (
     <section id="value" className="section section-alt">
       <div className="container">
@@ -688,7 +600,7 @@ function ValueProps() {
                   {item.icon}
                 </div>
                 <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>{item.title}</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.8 }}>
+                <p style={{ color: 'var(--text-body)', fontSize: 14, lineHeight: 1.8 }}>
                   {item.desc}
                 </p>
               </motion.div>
@@ -737,13 +649,13 @@ function GitHubShowcase() {
                 <div style={{
                   width: 44, height: 44,
                   borderRadius: 'var(--radius)',
-                  background: '#1a1a2e',
+                  background: 'var(--bg-alt)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
                 }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--text-heading)">
                     <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/>
                   </svg>
                 </div>
@@ -931,10 +843,8 @@ function Footer() {
 // ─── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
-    <>
-      <GridOverlay />
-      <div className="scan-line" />
-      <ParticleCanvas />
+    <ThemeProvider>
+      <GeometricParticleField />
       <Navbar />
       <main>
         <Hero />
@@ -946,6 +856,6 @@ export default function App() {
         <CTA />
       </main>
       <Footer />
-    </>
+    </ThemeProvider>
   )
 }
