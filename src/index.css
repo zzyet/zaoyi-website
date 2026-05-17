@@ -318,7 +318,7 @@ body {
 .hero-title {
   font-family: var(--font-sans);
   font-size: clamp(40px, 7vw, 64px);
-  font-weight: 300;
+  font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.08;
   color: var(--text-heading);
@@ -327,7 +327,7 @@ body {
 
 .hero-desc {
   font-size: 18px;
-  font-weight: 300;
+  font-weight: 400;
   color: var(--text-body);
   line-height: 1.7;
   max-width: 540px;
