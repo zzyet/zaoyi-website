@@ -268,7 +268,7 @@ function AICodingWindow() {
   const [activeStep, setActiveStep] = useState(0)
   const [visibleLines, setVisibleLines] = useState([])
   const timerRef = useRef(null)
-  const logEndRef = useRef(null)
+  const logContainerRef = useRef(null)
   const initializedRef = useRef(false)
 
   const steps = [
@@ -304,10 +304,11 @@ function AICodingWindow() {
     { step: 4, text: '> AI 监控已激活 — 实时追踪 200+ 指标', type: 'success' },
   ]
 
-  // Auto-scroll to bottom
+  // Auto-scroll log container (NOT the page)
   useEffect(() => {
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    const el = logContainerRef.current
+    if (el) {
+      el.scrollTop = el.scrollHeight
     }
   }, [visibleLines])
 
@@ -452,7 +453,7 @@ function AICodingWindow() {
             fontSize: 11,
             lineHeight: 1.8,
             letterSpacing: '0.01em',
-          }} className="vb-log-scroll">
+          }} className="vb-log-scroll" ref={logContainerRef}>
             {visibleLines.map((log, i) => (
               <motion.div
                 key={i}
@@ -476,7 +477,6 @@ function AICodingWindow() {
                 verticalAlign: 'middle', marginLeft: 2,
               }} />
             )}
-            <div ref={logEndRef} />
           </div>
         </motion.div>
       )}
