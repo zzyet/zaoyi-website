@@ -520,16 +520,17 @@ body {
 }
 
 :root {
-  --vb-terminal-bg: rgba(15,15,26,0.94);
-  --vb-terminal-border: rgba(124,92,255,0.20);
-  --vb-terminal-shadow: 0 8px 40px rgba(124,92,255,0.12);
-  --vb-terminal-text: #a0a0b8;
-  --vb-terminal-accent: #a78bfa;
-  --vb-log-success: #27c93f;
-  --vb-log-system: #a78bfa;
-  --vb-log-info: #a0a0b8;
-  --vb-cursor: #a78bfa;
+  --vb-terminal-bg: rgba(255,255,255,0.88);
+  --vb-terminal-border: rgba(124,92,255,0.15);
+  --vb-terminal-shadow: 0 8px 40px rgba(124,92,255,0.10);
+  --vb-terminal-text: #6b6b80;
+  --vb-terminal-accent: #7c5cff;
+  --vb-log-success: #10b981;
+  --vb-log-system: #7c5cff;
+  --vb-log-info: #5a5a72;
+  --vb-cursor: #7c5cff;
   --vb-button-bg: rgba(124,92,255,0.90);
+  --vb-stepbar-bg: rgba(124,92,255,0.04);
 }
 
 [data-theme="dark"] {
@@ -543,6 +544,7 @@ body {
   --vb-log-info: #c8c8da;
   --vb-cursor: #c4b5fd;
   --vb-button-bg: rgba(139,92,246,0.90);
+  --vb-stepbar-bg: rgba(139,92,246,0.08);
 }
 
 /* Custom scrollbar for terminal log */

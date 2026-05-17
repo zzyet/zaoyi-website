@@ -422,7 +422,7 @@ function AICodingWindow() {
           <div style={{
             display: 'flex', gap: 4, padding: '10px 16px',
             borderBottom: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.08))',
-            background: 'rgba(15,15,26,0.4)',
+            background: 'var(--vb-stepbar-bg, rgba(124,92,255,0.04))',
           }}>
             {steps.map((step, i) => (
               <div key={step.label}
