@@ -607,18 +607,14 @@ function Hero() {
               </span>
             </motion.div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35, duration: 0.7 }}
-              className="hero-title"
-            >
+            <h1 className="hero-title">
               从
               <span className="hero-em">想法</span>
-              到
+              <span className="hero-arrow">→</span>
+              <span className="hero-em">上线</span>
               <br />
-              <span className="hero-em">上线</span>，AI 全程驱动
-            </motion.h1>
+              AI <span className="hero-em">全程</span>驱动
+            </h1>
 
             <motion.p
               initial={{ opacity: 0, y: 20 }}
