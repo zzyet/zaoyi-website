@@ -613,9 +613,11 @@ function Hero() {
               transition={{ delay: 0.35, duration: 0.7 }}
               className="hero-title"
             >
-              从<span className="gradient-text">想法</span>到
+              从
+              <span className="hero-em">想法</span>
+              到
               <br />
-              <span className="gradient-text">上线</span>，AI 全程驱动
+              <span className="hero-em">上线</span>，AI 全程驱动
             </motion.h1>
 
             <motion.p
