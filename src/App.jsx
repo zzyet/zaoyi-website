@@ -361,8 +361,9 @@ function AICodingWindow() {
 
   return (
     <div style={{
-      position: 'fixed', bottom: minimized ? 20 : 20, right: 20,
-      zIndex: 999,
+      position: 'relative',
+      zIndex: 10,
+      flexShrink: 0,
       transition: 'all 0.3s ease',
     }}>
       {!minimized && (
@@ -588,12 +589,12 @@ function Hero() {
   return (
     <section style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
       <motion.div style={{ opacity: heroOpacity, y: heroY, width: '100%' }}>
-        <div className="container" style={{ position: 'relative', zIndex: 1 }}>
+        <div className="container" style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-end', gap: 40, flexWrap: 'wrap' }}>
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-            style={{ maxWidth: 680 }}
+            style={{ maxWidth: 680, flex: '1 1 400px' }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -643,6 +644,7 @@ function Hero() {
               </a>
             </motion.div>
           </motion.div>
+          <AICodingWindow />
         </div>
       </motion.div>
 
@@ -1116,7 +1118,6 @@ export default function App() {
     <ThemeProvider>
       <VBCodeBackground />
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <AICodingWindow />
         <Navbar />
         <main>
           <Hero />
