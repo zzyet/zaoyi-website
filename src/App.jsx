@@ -48,11 +48,13 @@ function VBCodeBackground() {
     const isMobile = window.innerWidth < 768
     const GAP = isMobile ? 32 : 24
     const DOT_RADIUS = 1.3
-    const WAVE_SPEED = 380          // px / second — ring expansion speed
-    const WAVE_AMPLITUDE = 14       // peak displacement (px)
-    const WAVE_LENGTH = 90          // wavelength (px) — ripple width
-    const WAVE_LIFETIME = 1800      // ms — total fade-out time
-    const SPAWN_INTERVAL = 60       // ms — min gap between mouse-trail ripples
+    const WAVE_SPEED = 480          // px / second — ring expansion speed
+    const WAVE_AMPLITUDE = 16       // peak displacement (px)
+    const WAVE_LENGTH = 120         // wavelength (px) — ripple width
+    const WAVE_LIFETIME = 2400      // ms — total fade-out time
+    const SPAWN_INTERVAL = 50       // ms — min gap between mouse-trail ripples
+    const HOVER_RADIUS = 160        // px — proximity glow radius around cursor
+    const HOVER_STRENGTH = 2.5      // glow intensity multiplier
 
     let width = 0, height = 0, dpr = 1
     let startTime = performance.now()
@@ -60,9 +62,9 @@ function VBCodeBackground() {
     const getColors = () => {
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
       return {
-        baseAlpha: isDark ? 0.20 : 0.16,
-        peakAlpha: isDark ? 0.55 : 0.50,
-        rgb: isDark ? '168,139,250' : '124,92,255',
+        baseAlpha: isDark ? 0.12 : 0.09,
+        peakAlpha: isDark ? 0.30 : 0.25,
+        rgb: isDark ? '155,155,170' : '160,160,172',
       }
     }
 
@@ -101,7 +103,7 @@ function VBCodeBackground() {
         born: performance.now(),
         strength,
       })
-      if (ripplesRef.current.length > 8) {
+      if (ripplesRef.current.length > 12) {
         ripplesRef.current.shift()
       }
     }
@@ -150,8 +152,24 @@ function VBCodeBackground() {
           intensity = Math.max(intensity, Math.abs(ringFade * lifeFade * distFade))
         }
 
-        const alpha = baseAlpha + (peakAlpha - baseAlpha) * Math.min(1, intensity * 1.4)
-        const radius = DOT_RADIUS + intensity * 1.4
+        const mx = mouseRef.current.x
+        const my = mouseRef.current.y
+        const mdx = dot.x - mx
+        const mdy = dot.y - my
+        const mDist = Math.sqrt(mdx * mdx + mdy * mdy)
+        let hoverGlow = 0
+        if (mDist < HOVER_RADIUS) {
+          const proximity = 1 - mDist / HOVER_RADIUS
+          const ease = proximity * proximity
+          hoverGlow = ease * HOVER_STRENGTH
+          const pullStrength = ease * 4
+          dx -= (mdx / (mDist || 1)) * pullStrength
+          dy -= (mdy / (mDist || 1)) * pullStrength
+          intensity = Math.max(intensity, ease)
+        }
+
+        const alpha = baseAlpha + (peakAlpha - baseAlpha) * Math.min(1, intensity * 1.4 + hoverGlow * 0.3)
+        const radius = DOT_RADIUS + intensity * 1.4 + hoverGlow * 0.8
 
         ctx.beginPath()
         ctx.arc(dot.x + dx, dot.y + dy, radius, 0, Math.PI * 2)
@@ -168,11 +186,11 @@ function VBCodeBackground() {
       const now = performance.now()
       if (now - mouseRef.current.lastSpawn > SPAWN_INTERVAL) {
         mouseRef.current.lastSpawn = now
-        spawnRipple(e.clientX, e.clientY, 0.55)
+        spawnRipple(e.clientX, e.clientY, 0.75)
       }
     }
     const onMouseDown = (e) => {
-      spawnRipple(e.clientX, e.clientY, 1.4)
+      spawnRipple(e.clientX, e.clientY, 1.8)
     }
     const onTouch = (e) => {
       const t = e.touches[0]
