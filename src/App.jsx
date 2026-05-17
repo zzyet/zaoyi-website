@@ -11,7 +11,9 @@ function useTheme() {
 function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('zaoyi-theme')
-    return saved || 'light'
+    if (saved) return saved
+    if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark'
+    return 'light'
   })
 
   useEffect(() => {
