@@ -321,8 +321,12 @@ body {
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.08;
-  color: var(--text-heading);
+  color: #4a4a68;
   margin-bottom: 22px;
+}
+
+[data-theme="dark"] .hero-title {
+  color: #c8c8da;
 }
 
 .hero-desc {
