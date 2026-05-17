@@ -424,7 +424,50 @@ body {
   .pipeline-arrow { display: none; }
 }
 
-/* ── Stat numbers ── */
+/* ── Value Props ── */
+.value-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 28px;
+}
+
+@media (max-width: 768px) {
+  .value-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+.value-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 34px 30px 30px;
+  position: relative;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.value-card:hover {
+  border-color: var(--vc-color, var(--accent));
+  box-shadow: 0 0 0 1px rgba(124,92,255,0.08), 0 12px 40px -16px var(--vc-color, rgba(124,92,255,0.15));
+}
+
+.value-card:hover .value-card-accent {
+  opacity: 1;
+}
+
+.value-icon {
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  color: #fff;
+  box-shadow: 0 6px 20px -6px var(--vc-color, rgba(124,92,255,0.35));
+}
 .stat-number {
   font-family: var(--font-sans);
   font-size: clamp(40px, 5.5vw, 60px);

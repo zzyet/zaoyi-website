@@ -814,47 +814,54 @@ function AdvantageCards() {
 const values = [
   {
     icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
       </svg>
     ),
     title: '零信息损耗',
-    desc: 'AI 统一管理需求到上线的全部信息，告别文档孤岛与沟通失真，确保每一行代码都可追溯至用户真实需求。'
+    desc: 'AI 统一管理需求到上线的全部信息，告别文档孤岛与沟通失真，确保每一行代码都可追溯至用户真实需求。',
+    color: '#7c5cff',
+    gradient: 'linear-gradient(135deg, #7c5cff, #a78bfa)',
   },
   {
     icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s-8-4.5-8-11.8V3l8-1.5L20 3v7.2C20 17.5 12 22 12 22z"/>
         <path d="M9 12l2 2 4-4"/>
       </svg>
     ),
     title: '端到端问责',
-    desc: '单一团队负责全流程，彻底消除 "这个问题是前端的/后端的/设计的" 等推诿，真正对最终产品负责。'
+    desc: '单一团队负责全流程，彻底消除 "这个问题是前端的/后端的/设计的" 等推诿，真正对最终产品负责。',
+    color: '#a855f7',
+    gradient: 'linear-gradient(135deg, #a855f7, #c084fc)',
   },
   {
     icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10"/>
         <polyline points="12 6 12 12 16 14"/>
       </svg>
     ),
     title: '极速迭代',
-    desc: '想法到可用原型只需数小时，用户反馈直达 AI 工作流，实现天级甚至小时级的持续交付节奏。'
+    desc: '想法到可用原型只需数小时，用户反馈直达 AI 工作流，实现天级甚至小时级的持续交付节奏。',
+    color: '#06b6d4',
+    gradient: 'linear-gradient(135deg, #06b6d4, #22d3ee)',
   },
   {
     icon: (
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2a7 7 0 0 1 7 7c0 2.4-1 4.5-2.6 6L12 22l-4.4-7A9 9 0 0 1 5 9a7 7 0 0 1 7-7z"/>
         <circle cx="12" cy="9" r="2.5"/>
       </svg>
     ),
     title: '持续进化',
-    desc: '产品上线后 AI 持续监控用户行为与系统指标，自动识别优化机会，让软件像生物一样不断进化。'
-  }
+    desc: '产品上线后 AI 持续监控用户行为与系统指标，自动识别优化机会，让软件像生物一样不断进化。',
+    color: '#f59e0b',
+    gradient: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+  },
 ]
 
 function ValueProps() {
-  const iconColors = [() => ({ background: 'rgba(124,92,255,0.12)' }), () => ({ background: 'rgba(168,85,247,0.12)' }), () => ({ background: 'rgba(34,211,238,0.12)' }), () => ({ background: 'rgba(245,158,11,0.12)' })]
   return (
     <section id="value" className="section section-alt">
       <div className="container">
@@ -868,35 +875,40 @@ function ValueProps() {
           </p>
         </ScrollReveal>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 24,
-          marginTop: 48
-        }}>
+        <div className="value-grid" style={{ marginTop: 56 }}>
           {values.map((item, i) => (
             <ScrollReveal key={item.title} delay={i * 0.12}>
               <motion.div
-                className="card"
-                whileHover={{ y: -4 }}
+                className="value-card"
+                whileHover={{ y: -6 }}
                 transition={{ duration: 0.3 }}
+                style={{ '--vc-color': item.color }}
               >
-                <div style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 20,
-                  ...iconColors[i](),
-                }}>
+                {/* Icon */}
+                <div className="value-icon" style={{ background: item.gradient }}>
                   {item.icon}
                 </div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>{item.title}</h3>
-                <p style={{ color: 'var(--text-body)', fontSize: 14, lineHeight: 1.8 }}>
+
+                {/* Title */}
+                <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, color: 'var(--text-heading)' }}>
+                  {item.title}
+                </h3>
+
+                {/* Description */}
+                <p style={{ color: 'var(--text-body)', fontSize: 15, lineHeight: 1.8 }}>
                   {item.desc}
                 </p>
+
+                {/* Subtle bottom accent stripe */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: 0, left: 0, right: 0,
+                  height: 3,
+                  background: item.gradient,
+                  borderRadius: '0 0 var(--radius) var(--radius)',
+                  opacity: 0,
+                  transition: 'opacity 0.3s ease',
+                }} className="value-card-accent" />
               </motion.div>
             </ScrollReveal>
           ))}
