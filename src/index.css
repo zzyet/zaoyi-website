@@ -112,7 +112,7 @@
 
 /* ── Reset ── */
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: transparent; transition: background-color 0.3s ease; }
+html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background: var(--bg-page); transition: background-color 0.3s ease; }
 
 body {
   font-family: var(--font-sans);
@@ -142,24 +142,22 @@ body {
 .section {
   position: relative;
   padding: var(--section-gap) 0;
-  /* Semi-transparent to let vbcode background through */
-  background: rgba(248, 248, 252, 0.80);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: var(--bg-page);
 }
 
 .section-alt {
-  background: rgba(238, 238, 249, 0.84);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: var(--bg-alt);
 }
 
 [data-theme="dark"] .section {
-  background: rgba(15, 15, 26, 0.80);
+  background: var(--bg-page);
 }
 [data-theme="dark"] .section-alt {
-  background: rgba(20, 20, 37, 0.84);
+  background: var(--bg-alt);
 }
+
+/* Hero is transparent so the dot grid + ripples show through */
+.hero { background: transparent !important; }
 
 /* ── Gradient text ── */
 .gradient-text {

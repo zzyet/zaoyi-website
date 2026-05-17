@@ -30,75 +30,185 @@ function ThemeProvider({ children }) {
   )
 }
 
-// ─── vbcode.io Style Background ───────────────────────────────────────────────
-// Elegant CSS blur balls + pastel orbs — no canvas overhead
+// ─── Dot Grid + Water Ripple Background ─────────────────────────────────────
+// Static dot grid; mouse movement spawns ripple wave sources that propagate
+// outward like water surface waves. Multiple ripples overlap and decay.
 function VBCodeBackground() {
+  const canvasRef = useRef(null)
+  const ripplesRef = useRef([])
+  const mouseRef = useRef({ x: -9999, y: -9999, lastSpawn: 0 })
+  const dotsRef = useRef([])
+  const rafRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+
+    const isMobile = window.innerWidth < 768
+    const GAP = isMobile ? 32 : 24
+    const DOT_RADIUS = 1.3
+    const WAVE_SPEED = 380          // px / second — ring expansion speed
+    const WAVE_AMPLITUDE = 14       // peak displacement (px)
+    const WAVE_LENGTH = 90          // wavelength (px) — ripple width
+    const WAVE_LIFETIME = 1800      // ms — total fade-out time
+    const SPAWN_INTERVAL = 60       // ms — min gap between mouse-trail ripples
+
+    let width = 0, height = 0, dpr = 1
+    let startTime = performance.now()
+
+    const getColors = () => {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+      return {
+        baseAlpha: isDark ? 0.20 : 0.16,
+        peakAlpha: isDark ? 0.55 : 0.50,
+        rgb: isDark ? '168,139,250' : '124,92,255',
+      }
+    }
+
+    const buildDots = () => {
+      const cols = Math.ceil(width / GAP) + 2
+      const rows = Math.ceil(height / GAP) + 2
+      const offsetX = (width - (cols - 1) * GAP) / 2
+      const offsetY = (height - (rows - 1) * GAP) / 2
+      const dots = []
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          dots.push({
+            x: offsetX + col * GAP,
+            y: offsetY + row * GAP,
+          })
+        }
+      }
+      dotsRef.current = dots
+    }
+
+    const resize = () => {
+      dpr = window.devicePixelRatio || 1
+      width = window.innerWidth
+      height = window.innerHeight
+      canvas.width = width * dpr
+      canvas.height = height * dpr
+      canvas.style.width = `${width}px`
+      canvas.style.height = `${height}px`
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      buildDots()
+    }
+
+    const spawnRipple = (x, y, strength = 1) => {
+      ripplesRef.current.push({
+        x, y,
+        born: performance.now(),
+        strength,
+      })
+      if (ripplesRef.current.length > 8) {
+        ripplesRef.current.shift()
+      }
+    }
+
+    const draw = () => {
+      const now = performance.now()
+      ctx.clearRect(0, 0, width, height)
+
+      const ripples = ripplesRef.current
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        if (now - ripples[i].born > WAVE_LIFETIME) ripples.splice(i, 1)
+      }
+
+      const { baseAlpha, peakAlpha, rgb } = getColors()
+      const dots = dotsRef.current
+
+      for (let i = 0; i < dots.length; i++) {
+        const dot = dots[i]
+        let dx = 0, dy = 0, intensity = 0
+
+        for (let r = 0; r < ripples.length; r++) {
+          const ripple = ripples[r]
+          const age = (now - ripple.born) / 1000
+          const ageMs = now - ripple.born
+
+          const rx = dot.x - ripple.x
+          const ry = dot.y - ripple.y
+          const dist = Math.sqrt(rx * rx + ry * ry) || 0.0001
+
+          const waveFront = age * WAVE_SPEED
+          const fromFront = dist - waveFront
+
+          if (Math.abs(fromFront) > WAVE_LENGTH * 1.2) continue
+
+          const lifeFade = 1 - ageMs / WAVE_LIFETIME
+          const distFade = Math.exp(-dist / 600)
+          const ringFade = Math.exp(-(fromFront * fromFront) / (2 * (WAVE_LENGTH / 2.5) ** 2))
+
+          const phase = (fromFront / WAVE_LENGTH) * Math.PI * 2
+          const wave = Math.sin(phase) * WAVE_AMPLITUDE * lifeFade * distFade * ringFade * ripple.strength
+
+          const nx = rx / dist
+          const ny = ry / dist
+          dx += nx * wave
+          dy += ny * wave
+          intensity = Math.max(intensity, Math.abs(ringFade * lifeFade * distFade))
+        }
+
+        const alpha = baseAlpha + (peakAlpha - baseAlpha) * Math.min(1, intensity * 1.4)
+        const radius = DOT_RADIUS + intensity * 1.4
+
+        ctx.beginPath()
+        ctx.arc(dot.x + dx, dot.y + dy, radius, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${rgb},${alpha})`
+        ctx.fill()
+      }
+
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    const onMouseMove = (e) => {
+      mouseRef.current.x = e.clientX
+      mouseRef.current.y = e.clientY
+      const now = performance.now()
+      if (now - mouseRef.current.lastSpawn > SPAWN_INTERVAL) {
+        mouseRef.current.lastSpawn = now
+        spawnRipple(e.clientX, e.clientY, 0.55)
+      }
+    }
+    const onMouseDown = (e) => {
+      spawnRipple(e.clientX, e.clientY, 1.4)
+    }
+    const onTouch = (e) => {
+      const t = e.touches[0]
+      if (!t) return
+      spawnRipple(t.clientX, t.clientY, 1.0)
+    }
+
+    resize()
+    window.addEventListener('resize', resize)
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('touchstart', onTouch, { passive: true })
+    window.addEventListener('touchmove', onTouch, { passive: true })
+    rafRef.current = requestAnimationFrame(draw)
+
+    return () => {
+      window.removeEventListener('resize', resize)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('touchstart', onTouch)
+      window.removeEventListener('touchmove', onTouch)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [])
+
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-      zIndex: -1, pointerEvents: 'none', overflow: 'hidden',
-    }}>
-      {/* Pastel gradient base (vbcode.io .with-pastel-balls pattern) */}
-      <div className="vb-pastel-base" style={{
-        position: 'absolute', inset: 0,
-        background: `
-          radial-gradient(circle at -5% -10%, var(--vb-pb1, #ffd1dc) 0%, transparent 60%),
-          radial-gradient(circle at 105% -10%, var(--vb-pb2, #e5d4ff) 0%, transparent 55%),
-          radial-gradient(circle at 5% 110%, var(--vb-pb3, #d1fff6) 0%, transparent 55%),
-          radial-gradient(circle at 105% 110%, var(--vb-pb4, #ffe5d9) 0%, transparent 50%)
-        `,
-        filter: 'blur(60px)',
-        opacity: 'var(--vb-pastel-opacity, 0.55)',
-      }} />
-      {/* Blur balls (vbcode.io .blur-ball pattern) */}
-      <div className="vb-blur-ball vb-ball-indigo" style={{
-        position: 'absolute',
-        width: 'clamp(200px, 40vw, 500px)',
-        height: 'clamp(200px, 40vw, 500px)',
-        borderRadius: '50%',
-        background: 'var(--vb-ball-1, #7c5cff)',
-        filter: 'blur(120px)',
-        top: '5%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        opacity: 'var(--vb-ball-opacity-1, 0.35)',
-        animation: 'vbBallFloat1 16s ease-in-out infinite',
-      }} />
-      <div className="vb-blur-ball vb-ball-teal" style={{
-        position: 'absolute',
-        width: 'clamp(150px, 30vw, 400px)',
-        height: 'clamp(150px, 30vw, 400px)',
-        borderRadius: '50%',
-        background: 'var(--vb-ball-2, #06b6d4)',
-        filter: 'blur(110px)',
-        top: '40%',
-        left: '20%',
-        opacity: 'var(--vb-ball-opacity-2, 0.28)',
-        animation: 'vbBallFloat2 14s ease-in-out infinite',
-      }} />
-      <div className="vb-blur-ball vb-ball-violet" style={{
-        position: 'absolute',
-        width: 'clamp(180px, 35vw, 450px)',
-        height: 'clamp(180px, 35vw, 450px)',
-        borderRadius: '50%',
-        background: 'var(--vb-ball-3, #a855f7)',
-        filter: 'blur(120px)',
-        top: '50%',
-        right: '10%',
-        opacity: 'var(--vb-ball-opacity-3, 0.22)',
-        animation: 'vbBallFloat3 18s ease-in-out infinite',
-      }} />
-      {/* Subtle grid overlay for tech feel */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: `
-          linear-gradient(rgba(124,92,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(124,92,255,0.03) 1px, transparent 1px)
-        `,
-        backgroundSize: '60px 60px',
-        opacity: 'var(--vb-grid-opacity, 0.6)',
-      }} />
-    </div>
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'fixed',
+        top: 0, left: 0,
+        width: '100vw', height: '100vh',
+        zIndex: 0,
+        pointerEvents: 'none',
+      }}
+    />
   )
 }
 
@@ -987,18 +1097,20 @@ export default function App() {
   return (
     <ThemeProvider>
       <VBCodeBackground />
-      <AICodingWindow />
-      <Navbar />
-      <main>
-        <Hero />
-        <Pipeline />
-        <AdvantageCards />
-        <ValueProps />
-        <ComparisonTable />
-        <GitHubShowcase />
-        <CTA />
-      </main>
-      <Footer />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <AICodingWindow />
+        <Navbar />
+        <main>
+          <Hero />
+          <Pipeline />
+          <AdvantageCards />
+          <ValueProps />
+          <ComparisonTable />
+          <GitHubShowcase />
+          <CTA />
+        </main>
+        <Footer />
+      </div>
     </ThemeProvider>
   )
 }
