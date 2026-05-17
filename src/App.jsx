@@ -671,11 +671,11 @@ function Hero() {
 
 // ─── Pipeline ────────────────────────────────────────────────────────────────
 const pipelineSteps = [
-  { step: '01', title: '需求分析', desc: 'AI 对话式需求挖掘，自动生成 PRD 与用户故事', ai: 'AI 辅助访谈 + 竞品分析 + 需求结构化' },
-  { step: '02', title: '产品设计', desc: 'AI 生成高保真原型与交互方案，快速验证产品假设', ai: 'AI 原型生成 + 设计系统 + 可用性评估' },
-  { step: '03', title: '工程实现', desc: 'AI 编码助手全栈开发，自动生成测试与文档', ai: 'AI 编码 + 代码审查 + 自动化文档' },
-  { step: '04', title: '质量保障', desc: 'AI 驱动全维度测试，智能缺陷检测与自动修复', ai: 'AI 测试生成 + 智能回归 + 自动修复' },
-  { step: '05', title: '部署上线', desc: '一键部署，AI 监控运维，持续优化迭代', ai: 'AI 部署编排 + 智能监控 + 自动扩缩' },
+  { step: '01', title: '需求分析', desc: 'AI 对话式需求挖掘，自动生成 PRD 与用户故事', ai: 'AI 辅助访谈 + 竞品分析 + 需求结构化', color: '#7c5cff', accent: 'rgba(124,92,255,0.10)', icon: '📋' },
+  { step: '02', title: '产品设计', desc: 'AI 生成高保真原型与交互方案，快速验证产品假设', ai: 'AI 原型生成 + 设计系统 + 可用性评估', color: '#a855f7', accent: 'rgba(168,85,247,0.10)', icon: '🎨' },
+  { step: '03', title: '工程实现', desc: 'AI 编码助手全栈开发，自动生成测试与文档', ai: 'AI 编码 + 代码审查 + 自动化文档', color: '#06b6d4', accent: 'rgba(6,182,212,0.10)', icon: '⚡' },
+  { step: '04', title: '质量保障', desc: 'AI 驱动全维度测试，智能缺陷检测与自动修复', ai: 'AI 测试生成 + 智能回归 + 自动修复', color: '#10b981', accent: 'rgba(16,185,129,0.10)', icon: '🔍' },
+  { step: '05', title: '部署上线', desc: '一键部署，AI 监控运维，持续优化迭代', ai: 'AI 部署编排 + 智能监控 + 自动扩缩', color: '#f59e0b', accent: 'rgba(245,158,11,0.10)', icon: '🚀' },
 ]
 
 function Pipeline() {
@@ -692,40 +692,66 @@ function Pipeline() {
           </p>
         </ScrollReveal>
 
-        <div style={{ marginTop: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+        {/* Horizontal pipeline cards */}
+        <div className="pipeline-grid" style={{ marginTop: 60 }}>
           {pipelineSteps.map((item, i) => (
-            <ScrollReveal key={item.step} delay={i * 0.1}>
-              <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-                {/* Left: step number + connector */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div className="step-number">{item.step}</div>
-                  {i < pipelineSteps.length - 1 && <div className="pipeline-connector" />}
+            <ScrollReveal key={item.step} delay={i * 0.12}>
+              <motion.div
+                className="pipeline-card"
+                whileHover={{ y: -6, boxShadow: `0 12px 40px -12px ${item.color}40` }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  '--pc-accent': item.color,
+                  '--pc-accent-bg': item.accent,
+                  borderTop: `3px solid ${item.color}`,
+                }}
+              >
+                {/* Step indicator + icon */}
+                <div className="pipeline-step-header">
+                  <div className="pipeline-step-badge" style={{ background: item.color }}>
+                    {item.icon}
+                  </div>
+                  <span className="pipeline-step-num">{item.step}</span>
                 </div>
 
-                {/* Right: card */}
-                <div className="card" style={{ flex: 1, maxWidth: 600, marginBottom: i < pipelineSteps.length - 1 ? 20 : 0 }}>
-                  <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{item.title}</h3>
-                  <p style={{ color: 'var(--text-body)', fontSize: 15, marginBottom: 12, lineHeight: 1.7 }}>
-                    {item.desc}
-                  </p>
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    fontSize: 13,
-                    color: 'var(--violet)',
-                    background: 'rgba(168,85,247,0.10)',
-                    padding: '4px 12px',
-                    borderRadius: 100
-                  }}>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M8 1.5C8 1.5 3 4.5 3 8.5V13.5L8 15L13 13.5V8.5C13 4.5 8 1.5 8 1.5Z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                      <path d="M6 8L7.5 9.5L10 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                {/* Connector arrow (between cards) */}
+                {i < pipelineSteps.length - 1 && (
+                  <div className="pipeline-arrow">
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                      <circle cx="14" cy="14" r="13" stroke={item.color} strokeWidth="1.5" strokeDasharray="3 3" opacity="0.4"/>
+                      <path d="M12 10L16 14L12 18" stroke={item.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
                     </svg>
-                    {item.ai}
-                  </span>
-                </div>
-              </div>
+                  </div>
+                )}
+
+                {/* Content */}
+                <h3 style={{ fontSize: 19, fontWeight: 700, marginBottom: 8, color: 'var(--text-heading)' }}>
+                  {item.title}
+                </h3>
+                <p style={{ color: 'var(--text-body)', fontSize: 14, lineHeight: 1.7, marginBottom: 16, flex: 1 }}>
+                  {item.desc}
+                </p>
+
+                {/* AI capability tag */}
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: item.color,
+                  background: item.accent,
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  border: `1px solid ${item.color}20`,
+                  alignSelf: 'flex-start',
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={item.color} strokeWidth="1.5">
+                    <path d="M8 1.5C8 1.5 3 4.5 3 8.5V13.5L8 15L13 13.5V8.5C13 4.5 8 1.5 8 1.5Z"/>
+                  </svg>
+                  {item.ai}
+                </span>
+              </motion.div>
             </ScrollReveal>
           ))}
         </div>
