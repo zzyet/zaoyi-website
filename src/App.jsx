@@ -30,184 +30,75 @@ function ThemeProvider({ children }) {
   )
 }
 
-// ─── Neural Network Background ─────────────────────────────────────────────
-function GeometricParticleField() {
-  const canvasRef = useRef(null)
-  const animRef = useRef(null)
-  const mouseRef = useRef({ x: -1000, y: -1000 })
-  const timeRef = useRef(0)
-  const { theme } = useTheme()
-  const themeRef = useRef(theme)
-
-  useEffect(() => {
-    themeRef.current = theme
-  }, [theme])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    let w, h
-
-    const isMobile = window.innerWidth < 768
-    const PARTICLE_COUNT = isMobile ? 35 : 120
-    const CONNECTION_DIST = isMobile ? 80 : 160
-    const MOUSE_RANGE = 200
-    const PULSE_SPEED = 0.003
-
-    const resize = () => {
-      w = canvas.width = window.innerWidth
-      h = canvas.height = window.innerHeight
-    }
-    resize()
-    window.addEventListener('resize', resize)
-
-    const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: (Math.random() - 0.5) * 0.4,
-      r: 1.5 + Math.random() * 2,
-      phase: Math.random() * Math.PI * 2,
-      pulseSpeed: 0.5 + Math.random() * 1.5,
-      energy: 0,
-    }))
-
-    const getThemeColors = (currentTheme) => {
-      const isDark = currentTheme === 'dark'
-      return {
-        bg: isDark ? '#0f0f1a' : '#f8f8fc',
-        node: isDark
-          ? ['rgba(124,92,255,0.8)', 'rgba(34,211,238,0.7)', 'rgba(168,85,247,0.7)']
-          : ['rgba(124,92,255,0.6)', 'rgba(34,211,238,0.5)', 'rgba(168,85,247,0.5)'],
-        line: isDark ? [124, 92, 255] : [124, 92, 255],
-        glow: isDark ? 'rgba(124,92,255,0.4)' : 'rgba(124,92,255,0.2)',
-        pulse: isDark ? [34, 211, 238] : [6, 182, 212],
-      }
-    }
-
-    const animate = () => {
-      timeRef.current += 1
-      const t = timeRef.current * PULSE_SPEED
-      const colors = getThemeColors(themeRef.current)
-
-      ctx.fillStyle = colors.bg
-      ctx.fillRect(0, 0, w, h)
-
-      const mx = mouseRef.current.x
-      const my = mouseRef.current.y
-
-      for (const p of particles) {
-        p.x += p.vx
-        p.y += p.vy
-
-        if (mx > 0 && my > 0) {
-          const dx = mx - p.x
-          const dy = my - p.y
-          const dist = Math.sqrt(dx * dx + dy * dy)
-          if (dist < MOUSE_RANGE) {
-            const force = (1 - dist / MOUSE_RANGE) * 0.02
-            p.vx += dx * force
-            p.vy += dy * force
-            p.energy = Math.min(1, p.energy + 0.05)
-          }
-          p.vx *= 0.99
-          p.vy *= 0.99
-        }
-
-        p.energy *= 0.97
-
-        if (p.x < -10) p.x = w + 10
-        if (p.x > w + 10) p.x = -10
-        if (p.y < -10) p.y = h + 10
-        if (p.y > h + 10) p.y = -10
-      }
-
-      const connDistSq = CONNECTION_DIST * CONNECTION_DIST
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const a = particles[i]
-          const b = particles[j]
-          const dx = a.x - b.x
-          const dy = a.y - b.y
-          const distSq = dx * dx + dy * dy
-
-          if (distSq < connDistSq) {
-            const dist = Math.sqrt(distSq)
-            const alpha = (1 - dist / CONNECTION_DIST) * 0.35
-            const energy = Math.max(a.energy, b.energy)
-
-            const r = colors.line[0] + (colors.pulse[0] - colors.line[0]) * energy
-            const g = colors.line[1] + (colors.pulse[1] - colors.line[1]) * energy
-            const bl = colors.line[2] + (colors.pulse[2] - colors.line[2]) * energy
-
-            ctx.beginPath()
-            ctx.moveTo(a.x, a.y)
-            ctx.lineTo(b.x, b.y)
-            ctx.strokeStyle = `rgba(${r|0},${g|0},${bl|0},${alpha})`
-            ctx.lineWidth = 0.5 + energy * 1.5
-            ctx.stroke()
-
-            if (energy > 0.3) {
-              const pulsePos = (Math.sin(t * 3 + a.phase) + 1) * 0.5
-              const px = a.x + (b.x - a.x) * pulsePos
-              const py = a.y + (b.y - a.y) * pulsePos
-              ctx.beginPath()
-              ctx.arc(px, py, 1.5 * energy, 0, Math.PI * 2)
-              ctx.fillStyle = `rgba(${colors.pulse[0]},${colors.pulse[1]},${colors.pulse[2]},${energy * 0.8})`
-              ctx.fill()
-            }
-          }
-        }
-      }
-
-      for (const p of particles) {
-        const breathR = p.r + Math.sin(t * p.pulseSpeed + p.phase) * 0.8
-        const glowR = breathR + 3 + p.energy * 6
-
-        if (p.energy > 0.1 || breathR > 2.5) {
-          ctx.beginPath()
-          ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2)
-          ctx.fillStyle = `rgba(${colors.pulse[0]},${colors.pulse[1]},${colors.pulse[2]},${0.05 + p.energy * 0.15})`
-          ctx.fill()
-        }
-
-        ctx.beginPath()
-        ctx.arc(p.x, p.y, breathR, 0, Math.PI * 2)
-        const colorIdx = Math.floor(p.phase) % 3
-        ctx.fillStyle = colors.node[colorIdx]
-        ctx.fill()
-      }
-
-      animRef.current = requestAnimationFrame(animate)
-    }
-
-    animate()
-
-    const onMouse = (e) => { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY }
-    const onMouseLeave = () => { mouseRef.current.x = -1000; mouseRef.current.y = -1000 }
-    window.addEventListener('mousemove', onMouse)
-    window.addEventListener('mouseleave', onMouseLeave)
-
-    return () => {
-      cancelAnimationFrame(animRef.current)
-      window.removeEventListener('resize', resize)
-      window.removeEventListener('mousemove', onMouse)
-      window.removeEventListener('mouseleave', onMouseLeave)
-    }
-  }, [])
-
+// ─── vbcode.io Style Background ───────────────────────────────────────────────
+// Elegant CSS blur balls + pastel orbs — no canvas overhead
+function VBCodeBackground() {
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'fixed',
-        top: 0, left: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex: -1,
-        pointerEvents: 'none',
-      }}
-    />
+    <div style={{
+      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+      zIndex: -1, pointerEvents: 'none', overflow: 'hidden',
+    }}>
+      {/* Pastel gradient base (vbcode.io .with-pastel-balls pattern) */}
+      <div className="vb-pastel-base" style={{
+        position: 'absolute', inset: 0,
+        background: `
+          radial-gradient(circle at -5% -10%, var(--vb-pb1, #ffd1dc) 0%, transparent 60%),
+          radial-gradient(circle at 105% -10%, var(--vb-pb2, #e5d4ff) 0%, transparent 55%),
+          radial-gradient(circle at 5% 110%, var(--vb-pb3, #d1fff6) 0%, transparent 55%),
+          radial-gradient(circle at 105% 110%, var(--vb-pb4, #ffe5d9) 0%, transparent 50%)
+        `,
+        filter: 'blur(60px)',
+        opacity: 'var(--vb-pastel-opacity, 0.55)',
+      }} />
+      {/* Blur balls (vbcode.io .blur-ball pattern) */}
+      <div className="vb-blur-ball vb-ball-indigo" style={{
+        position: 'absolute',
+        width: 'clamp(200px, 40vw, 500px)',
+        height: 'clamp(200px, 40vw, 500px)',
+        borderRadius: '50%',
+        background: 'var(--vb-ball-1, #7c5cff)',
+        filter: 'blur(120px)',
+        top: '5%',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        opacity: 'var(--vb-ball-opacity-1, 0.35)',
+        animation: 'vbBallFloat1 16s ease-in-out infinite',
+      }} />
+      <div className="vb-blur-ball vb-ball-teal" style={{
+        position: 'absolute',
+        width: 'clamp(150px, 30vw, 400px)',
+        height: 'clamp(150px, 30vw, 400px)',
+        borderRadius: '50%',
+        background: 'var(--vb-ball-2, #06b6d4)',
+        filter: 'blur(110px)',
+        top: '40%',
+        left: '20%',
+        opacity: 'var(--vb-ball-opacity-2, 0.28)',
+        animation: 'vbBallFloat2 14s ease-in-out infinite',
+      }} />
+      <div className="vb-blur-ball vb-ball-violet" style={{
+        position: 'absolute',
+        width: 'clamp(180px, 35vw, 450px)',
+        height: 'clamp(180px, 35vw, 450px)',
+        borderRadius: '50%',
+        background: 'var(--vb-ball-3, #a855f7)',
+        filter: 'blur(120px)',
+        top: '50%',
+        right: '10%',
+        opacity: 'var(--vb-ball-opacity-3, 0.22)',
+        animation: 'vbBallFloat3 18s ease-in-out infinite',
+      }} />
+      {/* Subtle grid overlay for tech feel */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        backgroundImage: `
+          linear-gradient(rgba(124,92,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(124,92,255,0.03) 1px, transparent 1px)
+        `,
+        backgroundSize: '60px 60px',
+        opacity: 'var(--vb-grid-opacity, 0.6)',
+      }} />
+    </div>
   )
 }
 
@@ -240,6 +131,253 @@ function ScrollReveal({ children, direction = 'up', delay = 0, className = '' })
     >
       {children}
     </motion.div>
+  )
+}
+
+// ─── AI E2E Coding Window ──────────────────────────────────────────────────
+function AICodingWindow() {
+  const [minimized, setMinimized] = useState(false)
+  const [activeStep, setActiveStep] = useState(0)
+  const [visibleLines, setVisibleLines] = useState([])
+  const timerRef = useRef(null)
+  const logEndRef = useRef(null)
+  const initializedRef = useRef(false)
+
+  const steps = [
+    { label: '需求分析', icon: '📋', color: '#7c5cff' },
+    { label: '产品设计', icon: '🎨', color: '#a855f7' },
+    { label: '工程实现', icon: '⚡', color: '#06b6d4' },
+    { label: '质量保障', icon: '🔍', color: '#10b981' },
+    { label: '部署上线', icon: '🚀', color: '#f59e0b' },
+  ]
+
+  const stepTimings = [800, 1000, 700, 600, 900]
+
+  const allLogs = [
+    { step: 0, text: '> AI Agent 启动 — 接收用户需求...', type: 'system' },
+    { step: 0, text: '> 解析需求文档 v2.3 — 识别 3 个核心功能模块', type: 'info' },
+    { step: 0, text: '> 竞品分析完成 — 生成 PRD 草稿', type: 'success' },
+    { step: 0, text: '> 结构化需求 — 12 条用户故事已生成', type: 'success' },
+    { step: 1, text: '> 启动设计智能体 — 分析交互模式...', type: 'system' },
+    { step: 1, text: '> 生成高保真原型 (Figma → React 组件映射)', type: 'info' },
+    { step: 1, text: '> 设计系统令牌已同步 — 一致性校验通过', type: 'success' },
+    { step: 2, text: '> 代码生成引擎启动 — 目标栈: React + Vite', type: 'system' },
+    { step: 2, text: '> 组件树构建中... [██░░░░░░░░] 20%', type: 'info' },
+    { step: 2, text: '> 全栈代码生成完成 — 187 个文件, 12,430 行', type: 'info' },
+    { step: 2, text: '> AI Code Review 通过 — 0 严重缺陷', type: 'success' },
+    { step: 3, text: '> 测试智能体启动 — 生成测试用例...', type: 'system' },
+    { step: 3, text: '> 单元测试: 246/246 通过 ✓', type: 'success' },
+    { step: 3, text: '> E2E 测试: 32/32 通过 ✓  覆盖率: 94.2%', type: 'success' },
+    { step: 3, text: '> 智能缺陷检测 — 发现 2 个边缘情况, 自动修复完成', type: 'info' },
+    { step: 4, text: '> CI/CD 流水线触发 — 构建镜像...', type: 'system' },
+    { step: 4, text: '> Docker 镜像构建完成 — 推送到 registry', type: 'info' },
+    { step: 4, text: '> K8s 滚动更新 — 流量切换中...', type: 'info' },
+    { step: 4, text: '> 部署成功 ✓  健康检查通过 — 生产环境已上线', type: 'success' },
+    { step: 4, text: '> AI 监控已激活 — 实时追踪 200+ 指标', type: 'success' },
+  ]
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [visibleLines])
+
+  // Core animation loop — runs once, drives steps via timer chain
+  useEffect(() => {
+    if (initializedRef.current) return
+    initializedRef.current = true
+
+    let cancelled = false
+
+    const addNextLine = () => {
+      if (cancelled) return
+
+      setVisibleLines(prev => {
+        const totalSoFar = prev.length
+        if (totalSoFar >= allLogs.length) return prev
+
+        return [...prev, allLogs[totalSoFar]]
+      })
+
+      setVisibleLines(prev => {
+        const total = prev.length
+        if (total >= allLogs.length) return prev
+
+        const nextLog = allLogs[total]
+        // Check if last line of current step — advance step after delay
+        const stepLines = allLogs.filter(l => l.step === nextLog.step)
+        const linesDoneInStep = prev.filter(l => l.step === nextLog.step).length + 1
+        const isLastInStep = linesDoneInStep >= stepLines.length
+
+        const delay = isLastInStep ? 1500 : (stepTimings[nextLog.step] || 900)
+        timerRef.current = setTimeout(addNextLine, delay)
+
+        // Update active step for header indicators
+        if (nextLog.step !== prev[prev.length - 1]?.step) {
+          setActiveStep(nextLog.step)
+        }
+
+        return prev
+      })
+    }
+
+    // Start after 800ms delay
+    timerRef.current = setTimeout(addNextLine, 800)
+
+    return () => {
+      cancelled = true
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: minimized ? 20 : 20, right: 20,
+      zIndex: 999,
+      transition: 'all 0.3s ease',
+    }}>
+      {!minimized && (
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+          style={{
+            width: 380, maxHeight: 420,
+            background: 'var(--vb-terminal-bg, rgba(15,15,26,0.94))',
+            backdropFilter: 'blur(24px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            borderRadius: 12,
+            border: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.20))',
+            boxShadow: 'var(--vb-terminal-shadow, 0 8px 40px rgba(124,92,255,0.12), 0 0 0 1px rgba(124,92,255,0.08))',
+            overflow: 'hidden',
+            marginBottom: 12,
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px',
+            borderBottom: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.12))',
+            background: 'rgba(124,92,255,0.06)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 5 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f56' }} />
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e' }} />
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#27c93f' }} />
+              </div>
+              <span style={{
+                fontSize: 12, fontFamily: 'var(--font-mono)',
+                color: 'var(--vb-terminal-text, #a0a0b8)',
+                marginLeft: 8, letterSpacing: '0.02em',
+              }}>
+                AI E2E Pipeline — zzyet.com
+              </span>
+            </div>
+            <button
+              onClick={() => setMinimized(true)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--vb-terminal-text, #6b6b80)', padding: 2,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M4 12L12 4M12 4H6M12 4V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Step indicators */}
+          <div style={{
+            display: 'flex', gap: 4, padding: '10px 16px',
+            borderBottom: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.08))',
+            background: 'rgba(15,15,26,0.4)',
+          }}>
+            {steps.map((step, i) => (
+              <div key={step.label}
+                style={{
+                  flex: 1, textAlign: 'center',
+                  padding: '4px 2px',
+                  borderRadius: 6,
+                  fontSize: 10,
+                  fontWeight: i <= activeStep ? 600 : 400,
+                  fontFamily: 'var(--font-sans)',
+                  color: i <= activeStep ? 'var(--vb-terminal-accent, #a78bfa)' : 'var(--vb-terminal-text, #6b6b80)',
+                  background: i <= activeStep ? 'rgba(124,92,255,0.10)' : 'transparent',
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <div style={{ fontSize: 14, marginBottom: 1 }}>{step.icon}</div>
+                {step.label}
+              </div>
+            ))}
+          </div>
+
+          {/* Log output */}
+          <div style={{
+            padding: '12px 16px',
+            maxHeight: 240,
+            overflowY: 'auto',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            lineHeight: 1.8,
+            letterSpacing: '0.01em',
+          }} className="vb-log-scroll">
+            {visibleLines.map((log, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  color: log.type === 'success' ? 'var(--vb-log-success, #27c93f)'
+                       : log.type === 'system' ? 'var(--vb-log-system, #a78bfa)'
+                       : 'var(--vb-log-info, #a0a0b8)',
+                }}
+              >
+                {log.text}
+              </motion.div>
+            ))}
+            {visibleLines.length < allLogs.length && (
+              <span style={{
+                display: 'inline-block', width: 8, height: 14,
+                background: 'var(--vb-cursor, #a78bfa)',
+                animation: 'vbBlink 0.8s step-end infinite',
+                verticalAlign: 'middle', marginLeft: 2,
+              }} />
+            )}
+            <div ref={logEndRef} />
+          </div>
+        </motion.div>
+      )}
+
+      {/* Minimized button */}
+      {minimized && (
+        <motion.button
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          onClick={() => setMinimized(false)}
+          whileHover={{ scale: 1.08 }}
+          style={{
+            width: 48, height: 48,
+            borderRadius: 12,
+            background: 'var(--vb-button-bg, rgba(124,92,255,0.90))',
+            border: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.30))',
+            cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: 'var(--vb-terminal-shadow, 0 4px 24px rgba(124,92,255,0.25))',
+            color: '#fff',
+            transition: 'all 0.3s ease',
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <rect x="2" y="3" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M6 7h8M6 10h5M6 13h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </motion.button>
+      )}
+    </div>
   )
 }
 
@@ -848,7 +986,8 @@ function Footer() {
 export default function App() {
   return (
     <ThemeProvider>
-      <GeometricParticleField />
+      <VBCodeBackground />
+      <AICodingWindow />
       <Navbar />
       <main>
         <Hero />

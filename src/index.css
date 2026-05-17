@@ -142,11 +142,23 @@ body {
 .section {
   position: relative;
   padding: var(--section-gap) 0;
-  background: var(--bg-page);
+  /* Semi-transparent to let vbcode background through */
+  background: rgba(248, 248, 252, 0.80);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 .section-alt {
-  background: var(--bg-alt);
+  background: rgba(238, 238, 249, 0.84);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+[data-theme="dark"] .section {
+  background: rgba(15, 15, 26, 0.80);
+}
+[data-theme="dark"] .section-alt {
+  background: rgba(20, 20, 37, 0.84);
 }
 
 /* ── Gradient text ── */
@@ -452,6 +464,99 @@ body {
 
 .hero-orb-1 { animation: orbFloat 14s ease-in-out infinite; }
 .hero-orb-2 { animation: orbFloat 12s ease-in-out infinite reverse; }
+
+/* ── vbcode.io Style Background ──────────────────────────────────────────── */
+@keyframes vbBallFloat1 {
+  0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+  33% { transform: translateX(-45%) translateY(40px) scale(1.06); }
+  66% { transform: translateX(-55%) translateY(-20px) scale(0.94); }
+}
+
+@keyframes vbBallFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -30px) scale(1.05); }
+  66% { transform: translate(-30px, 25px) scale(0.95); }
+}
+
+@keyframes vbBallFloat3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-50px, 20px) scale(1.04); }
+  66% { transform: translate(30px, -35px) scale(0.96); }
+}
+
+/* Theme-aware vbcode background tokens */
+:root {
+  --vb-pb1: #ffd1dc;
+  --vb-pb2: #e5d4ff;
+  --vb-pb3: #d1fff6;
+  --vb-pb4: #ffe5d9;
+  --vb-pastel-opacity: 0.48;
+  --vb-ball-1: #7c5cff;
+  --vb-ball-2: #06b6d4;
+  --vb-ball-3: #a855f7;
+  --vb-ball-opacity-1: 0.32;
+  --vb-ball-opacity-2: 0.25;
+  --vb-ball-opacity-3: 0.20;
+  --vb-grid-opacity: 0.6;
+}
+
+[data-theme="dark"] {
+  --vb-pb1: #ffd1dc;
+  --vb-pb2: #e5d4ff;
+  --vb-pb3: #d1fff6;
+  --vb-pb4: #ffe5d9;
+  --vb-pastel-opacity: 0.36;
+  --vb-ball-1: #818cf8;
+  --vb-ball-2: #2dd4bf;
+  --vb-ball-3: #a78bfa;
+  --vb-ball-opacity-1: 0.40;
+  --vb-ball-opacity-2: 0.32;
+  --vb-ball-opacity-3: 0.28;
+  --vb-grid-opacity: 0.35;
+}
+
+/* ── AI E2E Terminal Window ──────────────────────────────────────────────── */
+@keyframes vbBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+:root {
+  --vb-terminal-bg: rgba(15,15,26,0.94);
+  --vb-terminal-border: rgba(124,92,255,0.20);
+  --vb-terminal-shadow: 0 8px 40px rgba(124,92,255,0.12);
+  --vb-terminal-text: #a0a0b8;
+  --vb-terminal-accent: #a78bfa;
+  --vb-log-success: #27c93f;
+  --vb-log-system: #a78bfa;
+  --vb-log-info: #a0a0b8;
+  --vb-cursor: #a78bfa;
+  --vb-button-bg: rgba(124,92,255,0.90);
+}
+
+[data-theme="dark"] {
+  --vb-terminal-bg: rgba(12,12,22,0.96);
+  --vb-terminal-border: rgba(139,92,246,0.25);
+  --vb-terminal-shadow: 0 8px 40px rgba(139,92,246,0.18);
+  --vb-terminal-text: #c8c8da;
+  --vb-terminal-accent: #c4b5fd;
+  --vb-log-success: #34d399;
+  --vb-log-system: #c4b5fd;
+  --vb-log-info: #c8c8da;
+  --vb-cursor: #c4b5fd;
+  --vb-button-bg: rgba(139,92,246,0.90);
+}
+
+/* Custom scrollbar for terminal log */
+.vb-log-scroll::-webkit-scrollbar { width: 4px; }
+.vb-log-scroll::-webkit-scrollbar-track { background: transparent; }
+.vb-log-scroll::-webkit-scrollbar-thumb {
+  background: rgba(124,92,255,0.25);
+  border-radius: 2px;
+}
+.vb-log-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(124,92,255,0.40);
+}
 
 /* ── Theme Toggle ── */
 .theme-toggle {
