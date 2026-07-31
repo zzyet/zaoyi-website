@@ -426,7 +426,7 @@ function AICodingWindow() {
       position: 'relative',
       zIndex: 10,
       width: '100%',
-      maxWidth: 380,
+      maxWidth: 440,
       transition: 'all 0.3s ease',
     }}>
       {!minimized && (
@@ -436,13 +436,13 @@ function AICodingWindow() {
           transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="ai-window-card"
           style={{
-            width: '100%', maxWidth: 380, maxHeight: 420,
-            background: 'var(--vb-terminal-bg, rgba(15,15,26,0.94))',
-            backdropFilter: 'blur(24px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-            borderRadius: 12,
-            border: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.20))',
-            boxShadow: 'var(--vb-terminal-shadow, 0 8px 40px rgba(124,92,255,0.12), 0 0 0 1px rgba(124,92,255,0.08))',
+            width: '100%', maxWidth: 440, maxHeight: 360,
+            background: 'var(--vb-terminal-bg)',
+            backdropFilter: 'blur(10px) saturate(110%)',
+            WebkitBackdropFilter: 'blur(10px) saturate(110%)',
+            borderRadius: 16,
+            border: '1px solid var(--vb-terminal-border)',
+            boxShadow: 'none',
             overflow: 'hidden',
             marginBottom: 12,
           }}
@@ -450,20 +450,21 @@ function AICodingWindow() {
           {/* Header */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.12))',
-            background: 'rgba(124,92,255,0.06)',
+            padding: '10px 14px',
+            borderBottom: '1px solid var(--vb-terminal-border)',
+            background: 'transparent',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 5 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f56' }} />
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e' }} />
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#27c93f' }} />
+              <div style={{ display: 'flex', gap: 5, opacity: 0.55 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff5f56' }} />
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ffbd2e' }} />
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#27c93f' }} />
               </div>
               <span style={{
                 fontSize: 12, fontFamily: 'var(--font-mono)',
-                color: 'var(--vb-terminal-text, #a0a0b8)',
+                color: 'var(--text-muted)',
                 marginLeft: 8, letterSpacing: '0.02em',
+                opacity: 0.7,
               }}>
                 AI E2E Pipeline — zzyet.com
               </span>
@@ -472,7 +473,8 @@ function AICodingWindow() {
               onClick={() => setMinimized(true)}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--vb-terminal-text, #6b6b80)', padding: 2,
+                color: 'var(--text-muted)', padding: 2,
+                opacity: 0.55,
               }}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -483,25 +485,26 @@ function AICodingWindow() {
 
           {/* Step indicators */}
           <div style={{
-            display: 'flex', gap: 4, padding: '10px 16px',
-            borderBottom: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.08))',
-            background: 'var(--vb-stepbar-bg, rgba(124,92,255,0.04))',
+            display: 'flex', gap: 4, padding: '8px 14px',
+            borderBottom: '1px solid var(--vb-terminal-border)',
+            background: 'transparent',
           }}>
             {steps.map((step, i) => (
               <div key={step.label}
                 style={{
                   flex: 1, textAlign: 'center',
-                  padding: '4px 2px',
+                  padding: '3px 2px',
                   borderRadius: 6,
                   fontSize: 10,
                   fontWeight: i <= activeStep ? 600 : 400,
                   fontFamily: 'var(--font-sans)',
-                  color: i <= activeStep ? 'var(--vb-terminal-accent, #a78bfa)' : 'var(--vb-terminal-text, #6b6b80)',
-                  background: i <= activeStep ? 'rgba(124,92,255,0.10)' : 'transparent',
+                  color: i <= activeStep ? 'var(--vb-terminal-accent, #a78bfa)' : 'var(--text-muted)',
+                  background: i <= activeStep ? 'rgba(124,92,255,0.06)' : 'transparent',
                   transition: 'all 0.3s ease',
+                  opacity: i <= activeStep ? 1 : 0.72,
                 }}
               >
-                <div style={{ fontSize: 14, marginBottom: 1 }}>{step.icon}</div>
+                <div style={{ fontSize: 13, marginBottom: 1 }}>{step.icon}</div>
                 {step.label}
               </div>
             ))}
@@ -509,13 +512,13 @@ function AICodingWindow() {
 
           {/* Log output */}
           <div style={{
-            padding: '12px 16px',
-            minHeight: 200,
-            maxHeight: 240,
+            padding: '10px 14px',
+            minHeight: 160,
+            maxHeight: 200,
             overflowY: 'auto',
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            lineHeight: 1.8,
+            lineHeight: 1.7,
             letterSpacing: '0.01em',
           }} className="vb-log-scroll ai-window-log" ref={logContainerRef}>
             {visibleLines.map((log, i) => (
@@ -731,49 +734,40 @@ function Hero() {
       <div className="hero-scrim" />
       <motion.div className="hero-glow" style={{ x: orb1X, y: orb1Y }} />
 
-      <motion.div style={{ opacity: heroOpacity, y: heroY, width: '100%' }}>
-        <div className="container">
+      <motion.div
+        className="hero-stage"
+        style={{ opacity: heroOpacity, y: heroY }}
+      >
+        <div className="container hero-layout">
           <div className="hero-minimal-inner">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="hero-eyebrow"
-            >
-              <span className="hero-eyebrow-mark">//</span> AI-NATIVE · END-TO-END ENGINEERING
-            </motion.div>
-
             <motion.h1
               initial={{ opacity: 0, y: 28 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+              transition={{ duration: 0.8, delay: 0.08, ease: [0.25, 0.46, 0.45, 0.94] }}
               className="hero-title hero-title-mega"
             >
-              从
-              <span className="hero-em">想法</span>
-              <span className="hero-arrow">→</span>
-              <span className="hero-em">上线</span>
+              Ideas <span className="hero-arrow">→</span> Software
               <br />
-              AI 驱动 · 人类<span className="hero-em">掌舵</span>
+              <span className="hero-em">Faster.</span>
             </motion.h1>
 
             <motion.p
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.32 }}
+              transition={{ duration: 0.6, delay: 0.28 }}
               className="hero-tagline"
             >
-              AI 深度嵌入需求、设计、工程与部署的每一步，交付速度提升<strong style={{ color: 'var(--accent)', fontWeight: 600 }}> 10 倍</strong>，可靠性不打折。
+              让每一个想法，更快成为可交付的软件。
             </motion.p>
 
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.46 }}
+              transition={{ duration: 0.6, delay: 0.42 }}
               className="hero-actions"
             >
               <MagneticButton href="#pipeline" className="btn btn-primary hero-btn-lg">
-                看看 AI 怎么交付
+                看交付全流程
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
               </MagneticButton>
               <a href="https://t.me/Morty_an" target="_blank" rel="noopener noreferrer" className="hero-text-link">
@@ -785,7 +779,7 @@ function Hero() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
+              transition={{ duration: 0.6, delay: 0.56 }}
               className="hero-mini-stats"
             >
               <span><CountUp value={10} suffix="×" /> 更快交付</span>
@@ -795,11 +789,20 @@ function Hero() {
               <span><CountUp value={60} suffix="%" /> 更低成本</span>
             </motion.div>
           </div>
+
+          <motion.div
+            className="hero-visual"
+            initial={{ opacity: 0, x: 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.7, delay: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
+          >
+            <AICodingWindow />
+          </motion.div>
         </div>
       </motion.div>
 
-      <a href="#pipeline" className="hero-scroll-cue" aria-label="向下滚动查看更多">
-        <span>向下滚动</span>
+      <a href="#pipeline" className="hero-scroll-cue" aria-label="向下查看交付全流程">
+        <span>交付全流程</span>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
       </a>
     </section>
