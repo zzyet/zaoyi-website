@@ -50,22 +50,26 @@ function VBCodeBackground() {
       canvas.style.display = 'none'
       return
     }
-    const ctx = canvas.getContext('2d', { alpha: true })
 
-    const isMobile = window.innerWidth < 768
-    const GAP = isMobile ? 32 : 24
-    const DOT_RADIUS = 1.55
-    const WAVE_SPEED = 340          // px / second — slower = silkier expansion
-    const WAVE_AMPLITUDE = 14       // peak displacement (px)
-    const WAVE_LENGTH = 160         // wavelength (px) — wider soft rings
+    // Mobile / touch: static dots only — continuous RAF + touch ripples fight scroll
+    const isCoarse =
+      window.matchMedia('(max-width: 768px)').matches ||
+      window.matchMedia('(pointer: coarse)').matches
+
+    const ctx = canvas.getContext('2d', { alpha: true })
+    const GAP = isCoarse ? 36 : 24
+    const DOT_RADIUS = isCoarse ? 1.35 : 1.55
+    const WAVE_SPEED = 340
+    const WAVE_AMPLITUDE = 14
+    const WAVE_LENGTH = 160
     const WAVE_ENVELOPE = WAVE_LENGTH * 1.8
-    const WAVE_LIFETIME = 3200      // ms — longer fade for softer trails
-    const SPAWN_GAP = 28            // px along path between trail ripples
-    const SPAWN_INTERVAL = 28       // ms — denser trail when moving slow
+    const WAVE_LIFETIME = 3200
+    const SPAWN_GAP = 28
+    const SPAWN_INTERVAL = 28
     const HOVER_RADIUS = 170
     const HOVER_STRENGTH = 2.2
-    const SPRING = 0.14             // how fast dots chase the wave target
-    const DAMPING = 0.78            // velocity damping for overshoot settle
+    const SPRING = 0.14
+    const DAMPING = 0.78
     const MAX_RIPPLES = 18
     const TWO_PI = Math.PI * 2
     const INV_WAVE_LENGTH = 1 / WAVE_LENGTH
@@ -110,16 +114,53 @@ function VBCodeBackground() {
       dotsRef.current = dots
     }
 
+    const paintStatic = () => {
+      const { baseAlpha, rgb } = getColors()
+      ctx.clearRect(0, 0, width, height)
+      const dots = dotsRef.current
+      for (let i = 0; i < dots.length; i++) {
+        const dot = dots[i]
+        ctx.beginPath()
+        ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, TWO_PI)
+        ctx.fillStyle = `rgba(${rgb},${baseAlpha})`
+        ctx.fill()
+      }
+    }
+
     const resize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2)
-      width = window.innerWidth
-      height = window.innerHeight
+      const nextW = window.innerWidth
+      const nextH = window.innerHeight
+
+      // Mobile browser chrome show/hide fires resize and makes the page jump —
+      // ignore tiny height-only changes; only react to real orientation flips.
+      if (isCoarse && width > 0) {
+        const widthChanged = Math.abs(nextW - width) > 40
+        const heightChanged = Math.abs(nextH - height) > 120
+        if (!widthChanged && !heightChanged) return
+      }
+
+      dpr = Math.min(window.devicePixelRatio || 1, isCoarse ? 1.5 : 2)
+      width = nextW
+      height = nextH
       canvas.width = width * dpr
       canvas.height = height * dpr
-      canvas.style.width = `${width}px`
-      canvas.style.height = `${height}px`
+      canvas.style.width = '100%'
+      canvas.style.height = '100%'
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       buildDots()
+      if (isCoarse) paintStatic()
+    }
+
+    if (isCoarse) {
+      resize()
+      window.addEventListener('orientationchange', () => {
+        setTimeout(resize, 250)
+      })
+      const themeObs = new MutationObserver(paintStatic)
+      themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+      return () => {
+        themeObs.disconnect()
+      }
     }
 
     const spawnRipple = (x, y, strength = 1) => {
@@ -129,7 +170,6 @@ function VBCodeBackground() {
       }
     }
 
-    // Drop ripples along the mouse path so fast moves stay continuous
     const spawnAlongPath = (x, y, strength) => {
       const mouse = mouseRef.current
       const lx = mouse.lastX
@@ -161,7 +201,7 @@ function VBCodeBackground() {
     const easeOutCubic = (t) => 1 - (1 - t) ** 3
 
     const draw = (now) => {
-      const dt = Math.min(32, now - lastFrame) / 16.67 // normalize to ~60fps steps
+      const dt = Math.min(32, now - lastFrame) / 16.67
       lastFrame = now
       ctx.clearRect(0, 0, width, height)
 
@@ -190,7 +230,6 @@ function VBCodeBackground() {
           const ry = dot.y - ripple.y
           const distSq = rx * rx + ry * ry
           const waveFront = age * WAVE_SPEED
-          // Broad cull before sqrt
           const maxReach = waveFront + WAVE_ENVELOPE
           if (distSq > maxReach * maxReach) continue
           const minReach = waveFront - WAVE_ENVELOPE
@@ -204,7 +243,6 @@ function VBCodeBackground() {
           const distFade = Math.exp(-dist / 720)
           const ringFade = Math.exp(-(fromFront * fromFront) / ENVELOPE_SIGMA2)
 
-          // Soft dual-harmonic — primary swell + quieter trailing ripple
           const phase = fromFront * INV_WAVE_LENGTH * TWO_PI
           const wave =
             (Math.sin(phase) * 0.82 + Math.sin(phase * 1.65 + 0.4) * 0.18) *
@@ -223,7 +261,6 @@ function VBCodeBackground() {
         if (mDistSq < HOVER_RADIUS * HOVER_RADIUS) {
           const mDist = Math.sqrt(mDistSq) || 1
           const proximity = 1 - mDist / HOVER_RADIUS
-          // Smoothstep for softer hover falloff
           const ease = proximity * proximity * (3 - 2 * proximity)
           hoverGlow = ease * HOVER_STRENGTH
           const pullStrength = ease * 3.2
@@ -232,7 +269,6 @@ function VBCodeBackground() {
           intensity = Math.max(intensity, ease)
         }
 
-        // Spring toward target displacement — kills frame-to-frame jitter
         const ax = (tx - dot.dx) * spring
         const ay = (ty - dot.dy) * spring
         dot.vx = (dot.vx + ax) * damp
@@ -269,28 +305,17 @@ function VBCodeBackground() {
     const onMouseDown = (e) => {
       spawnRipple(e.clientX, e.clientY, 1.55)
     }
-    const onTouch = (e) => {
-      const t = e.touches[0]
-      if (!t) return
-      mouseRef.current.x = t.clientX
-      mouseRef.current.y = t.clientY
-      spawnAlongPath(t.clientX, t.clientY, 0.85)
-    }
 
     resize()
-    window.addEventListener('resize', resize)
+    window.addEventListener('resize', resize, { passive: true })
     window.addEventListener('mousemove', onMouseMove, { passive: true })
     window.addEventListener('mousedown', onMouseDown)
-    window.addEventListener('touchstart', onTouch, { passive: true })
-    window.addEventListener('touchmove', onTouch, { passive: true })
     rafRef.current = requestAnimationFrame(draw)
 
     return () => {
       window.removeEventListener('resize', resize)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mousedown', onMouseDown)
-      window.removeEventListener('touchstart', onTouch)
-      window.removeEventListener('touchmove', onTouch)
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
   }, [])
@@ -298,10 +323,12 @@ function VBCodeBackground() {
   return (
     <canvas
       ref={canvasRef}
+      aria-hidden="true"
       style={{
         position: 'fixed',
-        top: 0, left: 0,
-        width: '100vw', height: '100vh',
+        inset: 0,
+        width: '100%',
+        height: '100%',
         zIndex: -1,
         pointerEvents: 'none',
       }}
@@ -312,19 +339,24 @@ function VBCodeBackground() {
 // ─── Scroll Reveal ───────────────────────────────────────────────────────────
 function ScrollReveal({ children, direction = 'up', delay = 0, className = '' }) {
   const ref = useRef(null)
-  const inView = useInView(ref, { once: true, margin: '-80px' })
+  const inView = useInView(ref, { once: true, margin: '-40px' })
+  const isCoarse =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(max-width: 768px)').matches || window.matchMedia('(pointer: coarse)').matches)
 
   const variants = {
-    hidden: {
-      opacity: 0,
-      y: direction === 'up' ? 40 : direction === 'down' ? -40 : 0,
-      x: direction === 'left' ? 40 : direction === 'right' ? -40 : 0,
-    },
+    hidden: isCoarse
+      ? { opacity: 0, y: 12 }
+      : {
+          opacity: 0,
+          y: direction === 'up' ? 40 : direction === 'down' ? -40 : 0,
+          x: direction === 'left' ? 40 : direction === 'right' ? -40 : 0,
+        },
     visible: {
       opacity: 1,
       y: 0,
       x: 0,
-      transition: { duration: 0.7, delay, ease: [0.25, 0.46, 0.45, 0.94] }
+      transition: { duration: isCoarse ? 0.35 : 0.7, delay: isCoarse ? Math.min(delay, 0.08) : delay, ease: [0.25, 0.46, 0.45, 0.94] }
     }
   }
 
@@ -385,11 +417,31 @@ function AICodingWindow() {
   ]
 
   useEffect(() => {
+    if (
+      window.matchMedia('(max-width: 768px)').matches ||
+      window.matchMedia('(pointer: coarse)').matches
+    ) return
     const el = logContainerRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [visibleLines])
 
   useEffect(() => {
+    const isCoarse =
+      window.matchMedia('(max-width: 768px)').matches ||
+      window.matchMedia('(pointer: coarse)').matches
+
+    // Mobile: show a static snapshot — timers + scrollTop fight finger scrolling
+    if (isCoarse) {
+      setVisibleLines(allLogs.slice(0, 8).map((log, i) => ({
+        ...log,
+        id: i,
+        prefix: log.type === 'success' ? '✓' : log.type === 'system' ? '◆' : '›',
+      })))
+      setActiveStep(2)
+      setDone(false)
+      return
+    }
+
     let cancelled = false
     let index = 0
     const runId = ++runIdRef.current
@@ -417,18 +469,20 @@ function AICodingWindow() {
       if (index === 0 || allLogs[index - 1].step !== log.step) {
         setActiveStep(log.step)
       }
-      setVisibleLines(prev => [...prev, log])
+      setVisibleLines((prev) => [
+        ...prev,
+        {
+          ...log,
+          id: index,
+          prefix: log.type === 'success' ? '✓' : log.type === 'system' ? '◆' : '›',
+        },
+      ])
       index += 1
-      if (index >= allLogs.length) {
-        timerRef.current = setTimeout(resetAndLoop, 400)
-        return
-      }
-      const isLastInStep = allLogs[index].step !== log.step
-      const delay = isLastInStep ? 1200 : (stepTimings[log.step] || 800)
+      const delay = stepTimings[log.step] ?? 700
       timerRef.current = setTimeout(addNextLine, delay)
     }
 
-    timerRef.current = setTimeout(addNextLine, 500)
+    timerRef.current = setTimeout(addNextLine, 400)
     return () => {
       cancelled = true
       if (timerRef.current) clearTimeout(timerRef.current)
@@ -666,7 +720,7 @@ function CountUp({ value, suffix = '', duration = 1.4 }) {
 
 // ─── Hero ────────────────────────────────────────────────────────────────────
 function Hero() {
-  // Mouse-reactive parallax for the background glow
+  // Mouse-reactive parallax for the background glow (desktop only)
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
   const smoothX = useSpring(mouseX, { stiffness: 40, damping: 20 })
@@ -675,11 +729,15 @@ function Hero() {
   const orb1Y = useTransform(smoothY, v => v * -20)
 
   useEffect(() => {
+    const isCoarse =
+      window.matchMedia('(max-width: 768px)').matches ||
+      window.matchMedia('(pointer: coarse)').matches
+    if (isCoarse) return
     const onMove = (e) => {
       mouseX.set(e.clientX / window.innerWidth - 0.5)
       mouseY.set(e.clientY / window.innerHeight - 0.5)
     }
-    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mousemove', onMove, { passive: true })
     return () => window.removeEventListener('mousemove', onMove)
   }, [mouseX, mouseY])
 
@@ -974,7 +1032,7 @@ function ComparisonTable() {
         </ScrollReveal>
 
         <ScrollReveal delay={0.15}>
-          <div style={{ marginTop: 48, overflowX: 'auto' }}>
+          <div className="compare-scroll" style={{ marginTop: 48 }}>
             <table className="compare-table">
               <thead>
                 <tr>
