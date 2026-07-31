@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext } from 'react'
-import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring } from 'framer-motion'
+import { motion, useTransform, useInView, useMotionValue, useSpring } from 'framer-motion'
 
 // ─── Theme Context ──────────────────────────────────────────────────────────
 const ThemeContext = createContext({ theme: 'light', toggleTheme: () => {} })
@@ -666,10 +666,6 @@ function CountUp({ value, suffix = '', duration = 1.4 }) {
 
 // ─── Hero ────────────────────────────────────────────────────────────────────
 function Hero() {
-  const { scrollY } = useScroll()
-  const heroOpacity = useTransform(scrollY, [0, 400], [1, 0])
-  const heroY = useTransform(scrollY, [0, 400], [0, 60])
-
   // Mouse-reactive parallax for the background glow
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
@@ -692,14 +688,11 @@ function Hero() {
       <div className="hero-scrim" />
       <motion.div className="hero-glow" style={{ x: orb1X, y: orb1Y }} />
 
-      <motion.div
-        className="hero-stage"
-        style={{ opacity: heroOpacity, y: heroY }}
-      >
+      <div className="hero-stage">
         <div className="container hero-layout hero-layout-stack">
           <AICodingWindow />
         </div>
-      </motion.div>
+      </div>
 
       <a href="#pipeline" className="hero-scroll-cue" aria-label="向下查看交付全流程">
         <span>交付全流程</span>
