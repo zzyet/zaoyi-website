@@ -34,40 +34,53 @@ function ThemeProvider({ children }) {
 
 // ─── Dot Grid + Water Ripple Background ─────────────────────────────────────
 // Static dot grid; mouse movement spawns ripple wave sources that propagate
-// outward like water surface waves. Multiple ripples overlap and decay.
+// outward like water surface waves. Dots spring toward targets for silky motion.
 function VBCodeBackground() {
   const canvasRef = useRef(null)
   const ripplesRef = useRef([])
-  const mouseRef = useRef({ x: -9999, y: -9999, lastSpawn: 0 })
+  const mouseRef = useRef({ x: -9999, y: -9999, lastX: -9999, lastY: -9999, lastSpawn: 0 })
   const dotsRef = useRef([])
   const rafRef = useRef(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { alpha: true })
 
     const isMobile = window.innerWidth < 768
     const GAP = isMobile ? 32 : 24
     const DOT_RADIUS = 1.3
-    const WAVE_SPEED = 480          // px / second — ring expansion speed
-    const WAVE_AMPLITUDE = 16       // peak displacement (px)
-    const WAVE_LENGTH = 120         // wavelength (px) — ripple width
-    const WAVE_LIFETIME = 2400      // ms — total fade-out time
-    const SPAWN_INTERVAL = 50       // ms — min gap between mouse-trail ripples
-    const HOVER_RADIUS = 160        // px — proximity glow radius around cursor
-    const HOVER_STRENGTH = 2.5      // glow intensity multiplier
+    const WAVE_SPEED = 340          // px / second — slower = silkier expansion
+    const WAVE_AMPLITUDE = 14       // peak displacement (px)
+    const WAVE_LENGTH = 160         // wavelength (px) — wider soft rings
+    const WAVE_ENVELOPE = WAVE_LENGTH * 1.8
+    const WAVE_LIFETIME = 3200      // ms — longer fade for softer trails
+    const SPAWN_GAP = 28            // px along path between trail ripples
+    const SPAWN_INTERVAL = 28       // ms — denser trail when moving slow
+    const HOVER_RADIUS = 170
+    const HOVER_STRENGTH = 2.2
+    const SPRING = 0.14             // how fast dots chase the wave target
+    const DAMPING = 0.78            // velocity damping for overshoot settle
+    const MAX_RIPPLES = 18
+    const TWO_PI = Math.PI * 2
+    const INV_WAVE_LENGTH = 1 / WAVE_LENGTH
+    const ENVELOPE_SIGMA2 = 2 * (WAVE_ENVELOPE / 2.6) ** 2
 
     let width = 0, height = 0, dpr = 1
-    let startTime = performance.now()
+    let lastFrame = performance.now()
+    let colorCache = { theme: '', baseAlpha: 0.09, peakAlpha: 0.25, rgb: '160,160,172' }
 
     const getColors = () => {
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-      return {
+      const theme = document.documentElement.getAttribute('data-theme') || 'light'
+      if (colorCache.theme === theme) return colorCache
+      const isDark = theme === 'dark'
+      colorCache = {
+        theme,
         baseAlpha: isDark ? 0.12 : 0.09,
         peakAlpha: isDark ? 0.30 : 0.25,
         rgb: isDark ? '155,155,170' : '160,160,172',
       }
+      return colorCache
     }
 
     const buildDots = () => {
@@ -81,6 +94,11 @@ function VBCodeBackground() {
           dots.push({
             x: offsetX + col * GAP,
             y: offsetY + row * GAP,
+            dx: 0,
+            dy: 0,
+            vx: 0,
+            vy: 0,
+            glow: 0,
           })
         }
       }
@@ -88,7 +106,7 @@ function VBCodeBackground() {
     }
 
     const resize = () => {
-      dpr = window.devicePixelRatio || 1
+      dpr = Math.min(window.devicePixelRatio || 1, 2)
       width = window.innerWidth
       height = window.innerHeight
       canvas.width = width * dpr
@@ -100,18 +118,46 @@ function VBCodeBackground() {
     }
 
     const spawnRipple = (x, y, strength = 1) => {
-      ripplesRef.current.push({
-        x, y,
-        born: performance.now(),
-        strength,
-      })
-      if (ripplesRef.current.length > 12) {
+      ripplesRef.current.push({ x, y, born: performance.now(), strength })
+      if (ripplesRef.current.length > MAX_RIPPLES) {
         ripplesRef.current.shift()
       }
     }
 
-    const draw = () => {
-      const now = performance.now()
+    // Drop ripples along the mouse path so fast moves stay continuous
+    const spawnAlongPath = (x, y, strength) => {
+      const mouse = mouseRef.current
+      const lx = mouse.lastX
+      const ly = mouse.lastY
+      if (lx < -9000) {
+        spawnRipple(x, y, strength)
+        mouse.lastX = x
+        mouse.lastY = y
+        mouse.lastSpawn = performance.now()
+        return
+      }
+
+      const dx = x - lx
+      const dy = y - ly
+      const dist = Math.hypot(dx, dy)
+      if (dist < 2) return
+
+      const steps = Math.max(1, Math.floor(dist / SPAWN_GAP))
+      const stepStrength = strength * Math.min(1, 0.55 + dist / 220)
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps
+        spawnRipple(lx + dx * t, ly + dy * t, stepStrength * (0.55 + 0.45 * t))
+      }
+      mouse.lastX = x
+      mouse.lastY = y
+      mouse.lastSpawn = performance.now()
+    }
+
+    const easeOutCubic = (t) => 1 - (1 - t) ** 3
+
+    const draw = (now) => {
+      const dt = Math.min(32, now - lastFrame) / 16.67 // normalize to ~60fps steps
+      lastFrame = now
       ctx.clearRect(0, 0, width, height)
 
       const ripples = ripplesRef.current
@@ -121,60 +167,81 @@ function VBCodeBackground() {
 
       const { baseAlpha, peakAlpha, rgb } = getColors()
       const dots = dotsRef.current
+      const mx = mouseRef.current.x
+      const my = mouseRef.current.y
+      const spring = 1 - Math.pow(1 - SPRING, dt)
+      const damp = Math.pow(DAMPING, dt)
 
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
-        let dx = 0, dy = 0, intensity = 0
+        let tx = 0, ty = 0, intensity = 0
 
         for (let r = 0; r < ripples.length; r++) {
           const ripple = ripples[r]
-          const age = (now - ripple.born) / 1000
           const ageMs = now - ripple.born
+          const age = ageMs * 0.001
 
           const rx = dot.x - ripple.x
           const ry = dot.y - ripple.y
-          const dist = Math.sqrt(rx * rx + ry * ry) || 0.0001
-
+          const distSq = rx * rx + ry * ry
           const waveFront = age * WAVE_SPEED
+          // Broad cull before sqrt
+          const maxReach = waveFront + WAVE_ENVELOPE
+          if (distSq > maxReach * maxReach) continue
+          const minReach = waveFront - WAVE_ENVELOPE
+          if (minReach > 0 && distSq < minReach * minReach) continue
+
+          const dist = Math.sqrt(distSq) || 0.0001
           const fromFront = dist - waveFront
 
-          if (Math.abs(fromFront) > WAVE_LENGTH * 1.2) continue
+          const lifeT = ageMs / WAVE_LIFETIME
+          const lifeFade = 1 - easeOutCubic(lifeT)
+          const distFade = Math.exp(-dist / 720)
+          const ringFade = Math.exp(-(fromFront * fromFront) / ENVELOPE_SIGMA2)
 
-          const lifeFade = 1 - ageMs / WAVE_LIFETIME
-          const distFade = Math.exp(-dist / 600)
-          const ringFade = Math.exp(-(fromFront * fromFront) / (2 * (WAVE_LENGTH / 2.5) ** 2))
+          // Soft dual-harmonic — primary swell + quieter trailing ripple
+          const phase = fromFront * INV_WAVE_LENGTH * TWO_PI
+          const wave =
+            (Math.sin(phase) * 0.82 + Math.sin(phase * 1.65 + 0.4) * 0.18) *
+            WAVE_AMPLITUDE * lifeFade * distFade * ringFade * ripple.strength
 
-          const phase = (fromFront / WAVE_LENGTH) * Math.PI * 2
-          const wave = Math.sin(phase) * WAVE_AMPLITUDE * lifeFade * distFade * ringFade * ripple.strength
-
-          const nx = rx / dist
-          const ny = ry / dist
-          dx += nx * wave
-          dy += ny * wave
+          const invDist = 1 / dist
+          tx += rx * invDist * wave
+          ty += ry * invDist * wave
           intensity = Math.max(intensity, Math.abs(ringFade * lifeFade * distFade))
         }
 
-        const mx = mouseRef.current.x
-        const my = mouseRef.current.y
         const mdx = dot.x - mx
         const mdy = dot.y - my
-        const mDist = Math.sqrt(mdx * mdx + mdy * mdy)
+        const mDistSq = mdx * mdx + mdy * mdy
         let hoverGlow = 0
-        if (mDist < HOVER_RADIUS) {
+        if (mDistSq < HOVER_RADIUS * HOVER_RADIUS) {
+          const mDist = Math.sqrt(mDistSq) || 1
           const proximity = 1 - mDist / HOVER_RADIUS
-          const ease = proximity * proximity
+          // Smoothstep for softer hover falloff
+          const ease = proximity * proximity * (3 - 2 * proximity)
           hoverGlow = ease * HOVER_STRENGTH
-          const pullStrength = ease * 4
-          dx -= (mdx / (mDist || 1)) * pullStrength
-          dy -= (mdy / (mDist || 1)) * pullStrength
+          const pullStrength = ease * 3.2
+          tx -= (mdx / mDist) * pullStrength
+          ty -= (mdy / mDist) * pullStrength
           intensity = Math.max(intensity, ease)
         }
 
-        const alpha = baseAlpha + (peakAlpha - baseAlpha) * Math.min(1, intensity * 1.4 + hoverGlow * 0.3)
-        const radius = DOT_RADIUS + intensity * 1.4 + hoverGlow * 0.8
+        // Spring toward target displacement — kills frame-to-frame jitter
+        const ax = (tx - dot.dx) * spring
+        const ay = (ty - dot.dy) * spring
+        dot.vx = (dot.vx + ax) * damp
+        dot.vy = (dot.vy + ay) * damp
+        dot.dx += dot.vx
+        dot.dy += dot.vy
+        dot.glow += (intensity - dot.glow) * Math.min(1, 0.18 * dt)
+
+        const glow = Math.max(0, Math.min(1.4, dot.glow + hoverGlow * 0.28))
+        const alpha = baseAlpha + (peakAlpha - baseAlpha) * Math.min(1, glow * 1.25)
+        const radius = DOT_RADIUS + glow * 1.25
 
         ctx.beginPath()
-        ctx.arc(dot.x + dx, dot.y + dy, radius, 0, Math.PI * 2)
+        ctx.arc(dot.x + dot.dx, dot.y + dot.dy, radius, 0, TWO_PI)
         ctx.fillStyle = `rgba(${rgb},${alpha})`
         ctx.fill()
       }
@@ -186,23 +253,28 @@ function VBCodeBackground() {
       mouseRef.current.x = e.clientX
       mouseRef.current.y = e.clientY
       const now = performance.now()
-      if (now - mouseRef.current.lastSpawn > SPAWN_INTERVAL) {
-        mouseRef.current.lastSpawn = now
-        spawnRipple(e.clientX, e.clientY, 0.75)
+      const moved = Math.hypot(
+        e.clientX - mouseRef.current.lastX,
+        e.clientY - mouseRef.current.lastY,
+      )
+      if (moved >= SPAWN_GAP || now - mouseRef.current.lastSpawn > SPAWN_INTERVAL) {
+        spawnAlongPath(e.clientX, e.clientY, 0.62)
       }
     }
     const onMouseDown = (e) => {
-      spawnRipple(e.clientX, e.clientY, 1.8)
+      spawnRipple(e.clientX, e.clientY, 1.55)
     }
     const onTouch = (e) => {
       const t = e.touches[0]
       if (!t) return
-      spawnRipple(t.clientX, t.clientY, 1.0)
+      mouseRef.current.x = t.clientX
+      mouseRef.current.y = t.clientY
+      spawnAlongPath(t.clientX, t.clientY, 0.85)
     }
 
     resize()
     window.addEventListener('resize', resize)
-    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mousemove', onMouseMove, { passive: true })
     window.addEventListener('mousedown', onMouseDown)
     window.addEventListener('touchstart', onTouch, { passive: true })
     window.addEventListener('touchmove', onTouch, { passive: true })
