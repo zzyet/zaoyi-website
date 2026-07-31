@@ -637,15 +637,13 @@ function Hero() {
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0])
   const heroY = useTransform(scrollY, [0, 400], [0, 60])
 
-  // Mouse-reactive parallax for the background glow orbs
+  // Mouse-reactive parallax for the background glow
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
   const smoothX = useSpring(mouseX, { stiffness: 40, damping: 20 })
   const smoothY = useSpring(mouseY, { stiffness: 40, damping: 20 })
-  const orb1X = useTransform(smoothX, v => v * -36)
-  const orb1Y = useTransform(smoothY, v => v * -24)
-  const orb2X = useTransform(smoothX, v => v * 28)
-  const orb2Y = useTransform(smoothY, v => v * 20)
+  const orb1X = useTransform(smoothX, v => v * -30)
+  const orb1Y = useTransform(smoothY, v => v * -20)
 
   useEffect(() => {
     const onMove = (e) => {
@@ -657,96 +655,74 @@ function Hero() {
   }, [mouseX, mouseY])
 
   return (
-    <section className="hero">
+    <section className="hero hero-minimal">
       <div className="hero-scrim" />
+      <motion.div className="hero-glow" style={{ x: orb1X, y: orb1Y }} />
+
       <motion.div style={{ opacity: heroOpacity, y: heroY, width: '100%' }}>
-        <div className="container hero-row">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="hero-copy-block"
-          >
+        <div className="container">
+          <div className="hero-minimal-inner">
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="hero-eyebrow"
             >
-              <span className="badge hero-badge" style={{ marginBottom: 22, display: 'inline-flex' }}>
-                <span className="badge-dot" />
-                AI 原生端到端软件开发
-              </span>
+              <span className="hero-eyebrow-mark">//</span> AI-NATIVE · END-TO-END ENGINEERING
             </motion.div>
 
-            <h1 className="hero-title">
+            <motion.h1
+              initial={{ opacity: 0, y: 28 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="hero-title hero-title-mega"
+            >
               从
               <span className="hero-em">想法</span>
               <span className="hero-arrow">→</span>
               <span className="hero-em">上线</span>
               <br />
-              AI <span className="hero-em">全程</span>驱动
-            </h1>
+              AI 驱动 · 人类<span className="hero-em">掌舵</span>
+            </motion.h1>
 
             <motion.p
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.6 }}
-              className="hero-desc"
+              transition={{ duration: 0.6, delay: 0.32 }}
+              className="hero-tagline"
             >
-              造翼科技 将 AI 深度融入软件开发全生命周期，突破传统开发瓶颈，实现 <strong style={{ color: 'var(--accent)', fontWeight: 600 }}>10 倍速</strong> 端到端交付。
+              AI 深度嵌入需求、设计、工程与部署的每一步，交付速度提升<strong style={{ color: 'var(--accent)', fontWeight: 600 }}> 10 倍</strong>，可靠性不打折。
             </motion.p>
 
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.65, duration: 0.6 }}
-              className="hero-cta-row"
+              transition={{ duration: 0.6, delay: 0.46 }}
+              className="hero-actions"
             >
-              <MagneticButton href="#pipeline" className="btn btn-primary">
-                探索全流程
+              <MagneticButton href="#pipeline" className="btn btn-primary hero-btn-lg">
+                看看 AI 怎么交付
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
               </MagneticButton>
-              <a href="https://t.me/Morty_an" target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+              <a href="https://t.me/Morty_an" target="_blank" rel="noopener noreferrer" className="hero-text-link">
                 预约演示
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </a>
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8, duration: 0.6 }}
-              className="hero-stats"
+              transition={{ duration: 0.6, delay: 0.6 }}
+              className="hero-mini-stats"
             >
-              <div className="hero-stat">
-                <span className="hero-stat-num" style={{ color: 'var(--accent)' }}><CountUp value={10} suffix="×" /></span>
-                <span className="hero-stat-label">开发速度提升</span>
-              </div>
-              <div className="hero-stat-divider" />
-              <div className="hero-stat">
-                <span className="hero-stat-num" style={{ color: 'var(--teal)' }}><CountUp value={92} suffix="%" /></span>
-                <span className="hero-stat-label">缺陷率降低</span>
-              </div>
-              <div className="hero-stat-divider" />
-              <div className="hero-stat">
-                <span className="hero-stat-num" style={{ color: 'var(--violet)' }}><CountUp value={60} suffix="%" /></span>
-                <span className="hero-stat-label">开发成本降低</span>
-              </div>
+              <span><CountUp value={10} suffix="×" /> 更快交付</span>
+              <span className="hero-mini-stats-sep">/</span>
+              <span><CountUp value={92} suffix="%" /> 更少缺陷</span>
+              <span className="hero-mini-stats-sep">/</span>
+              <span><CountUp value={60} suffix="%" /> 更低成本</span>
             </motion.div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 50, rotate: -3 }}
-            animate={{ opacity: 1, x: 0, rotate: 0 }}
-            transition={{ duration: 0.85, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="hero-visual"
-          >
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 1.3 }}
-            >
-              <AICodingWindow />
-            </motion.div>
-          </motion.div>
+          </div>
         </div>
       </motion.div>
 
@@ -754,26 +730,6 @@ function Hero() {
         <span>向下滚动</span>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
       </a>
-
-      {/* Animated gradient orbs behind hero — drift with cursor for parallax depth */}
-      <motion.div className="hero-orb-1" style={{
-        position: 'absolute', top: '-20%', right: '-10%',
-        width: '60vw', height: '60vw', maxWidth: 700, maxHeight: 700,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(124,92,255,0.3) 0%, rgba(34,211,238,0.18) 40%, transparent 70%)',
-        pointerEvents: 'none',
-        filter: 'blur(40px)',
-        x: orb1X, y: orb1Y,
-      }} />
-      <motion.div className="hero-orb-2" style={{
-        position: 'absolute', bottom: '-10%', left: '-5%',
-        width: '40vw', height: '40vw', maxWidth: 500, maxHeight: 500,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(168,85,247,0.25) 0%, rgba(124,92,255,0.14) 50%, transparent 70%)',
-        pointerEvents: 'none',
-        filter: 'blur(40px)',
-        x: orb2X, y: orb2Y,
-      }} />
     </section>
   )
 }
