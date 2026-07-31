@@ -45,11 +45,16 @@ function VBCodeBackground() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) {
+      canvas.style.display = 'none'
+      return
+    }
     const ctx = canvas.getContext('2d', { alpha: true })
 
     const isMobile = window.innerWidth < 768
     const GAP = isMobile ? 32 : 24
-    const DOT_RADIUS = 1.3
+    const DOT_RADIUS = 1.55
     const WAVE_SPEED = 340          // px / second — slower = silkier expansion
     const WAVE_AMPLITUDE = 14       // peak displacement (px)
     const WAVE_LENGTH = 160         // wavelength (px) — wider soft rings
@@ -68,7 +73,7 @@ function VBCodeBackground() {
 
     let width = 0, height = 0, dpr = 1
     let lastFrame = performance.now()
-    let colorCache = { theme: '', baseAlpha: 0.09, peakAlpha: 0.25, rgb: '160,160,172' }
+    let colorCache = { theme: '', baseAlpha: 0.07, peakAlpha: 0.24, rgb: '124,110,190' }
 
     const getColors = () => {
       const theme = document.documentElement.getAttribute('data-theme') || 'light'
@@ -76,9 +81,9 @@ function VBCodeBackground() {
       const isDark = theme === 'dark'
       colorCache = {
         theme,
-        baseAlpha: isDark ? 0.12 : 0.09,
-        peakAlpha: isDark ? 0.30 : 0.25,
-        rgb: isDark ? '155,155,170' : '160,160,172',
+        baseAlpha: isDark ? 0.1 : 0.07,
+        peakAlpha: isDark ? 0.28 : 0.24,
+        rgb: isDark ? '168,155,220' : '124,110,190',
       }
       return colorCache
     }
@@ -338,242 +343,219 @@ function ScrollReveal({ children, direction = 'up', delay = 0, className = '' })
 
 // ─── AI E2E Coding Window ──────────────────────────────────────────────────
 function AICodingWindow() {
-  const [minimized, setMinimized] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
   const [visibleLines, setVisibleLines] = useState([])
+  const [done, setDone] = useState(false)
   const timerRef = useRef(null)
   const logContainerRef = useRef(null)
+  const runIdRef = useRef(0)
 
   const steps = [
-    { label: '需求分析', icon: '📋', color: '#7c5cff' },
-    { label: '产品设计', icon: '🎨', color: '#a855f7' },
-    { label: '工程实现', icon: '⚡', color: '#06b6d4' },
-    { label: '质量保障', icon: '🔍', color: '#10b981' },
-    { label: '部署上线', icon: '🚀', color: '#f59e0b' },
+    { label: '需求分析', color: '#7c5cff' },
+    { label: '产品设计', color: '#a855f7' },
+    { label: '工程实现', color: '#06b6d4' },
+    { label: '质量保障', color: '#10b981' },
+    { label: '部署上线', color: '#f59e0b' },
   ]
 
-  const stepTimings = [800, 1000, 700, 600, 900]
+  const stepTimings = [720, 900, 640, 560, 820]
 
   const allLogs = [
-    { step: 0, text: '> AI Agent 启动 — 接收用户需求...', type: 'system' },
-    { step: 0, text: '> 解析需求文档 v2.3 — 识别 3 个核心功能模块', type: 'info' },
-    { step: 0, text: '> 竞品分析完成 — 生成 PRD 草稿', type: 'success' },
-    { step: 0, text: '> 结构化需求 — 12 条用户故事已生成', type: 'success' },
-    { step: 1, text: '> 启动设计智能体 — 分析交互模式...', type: 'system' },
-    { step: 1, text: '> 生成高保真原型 (Figma → React 组件映射)', type: 'info' },
-    { step: 1, text: '> 设计系统令牌已同步 — 一致性校验通过', type: 'success' },
-    { step: 2, text: '> 代码生成引擎启动 — 目标栈: React + Vite', type: 'system' },
-    { step: 2, text: '> 组件树构建中... [██░░░░░░░░] 20%', type: 'info' },
-    { step: 2, text: '> 全栈代码生成完成 — 187 个文件, 12,430 行', type: 'info' },
-    { step: 2, text: '> AI Code Review 通过 — 0 严重缺陷', type: 'success' },
-    { step: 3, text: '> 测试智能体启动 — 生成测试用例...', type: 'system' },
-    { step: 3, text: '> 单元测试: 246/246 通过 ✓', type: 'success' },
-    { step: 3, text: '> E2E 测试: 32/32 通过 ✓  覆盖率: 94.2%', type: 'success' },
-    { step: 3, text: '> 智能缺陷检测 — 发现 2 个边缘情况, 自动修复完成', type: 'info' },
-    { step: 4, text: '> CI/CD 流水线触发 — 构建镜像...', type: 'system' },
-    { step: 4, text: '> Docker 镜像构建完成 — 推送到 registry', type: 'info' },
-    { step: 4, text: '> K8s 滚动更新 — 流量切换中...', type: 'info' },
-    { step: 4, text: '> 部署成功 ✓  健康检查通过 — 生产环境已上线', type: 'success' },
-    { step: 4, text: '> AI 监控已激活 — 实时追踪 200+ 指标', type: 'success' },
+    { step: 0, text: 'AI Agent 启动 — 接入企业需求会话，建立上下文窗口与约束边界', meta: 'agent.init', type: 'system' },
+    { step: 0, text: '解析需求文档 v2.3 — 识别 3 个核心模块、7 个接口契约、14 条验收标准', meta: 'prd.parse', type: 'info' },
+    { step: 0, text: '竞品与场景分析完成 — 生成结构化 PRD，并标注优先级与风险项', meta: 'prd.draft', type: 'success' },
+    { step: 0, text: '需求结构化完成 — 输出 12 条用户故事 + 验收用例矩阵，待人工确认', meta: 'stories×12', type: 'success' },
+    { step: 1, text: '设计智能体启动 — 基于用户旅程拆解页面流、状态机与交互边界', meta: 'design.boot', type: 'system' },
+    { step: 1, text: '高保真原型生成 — Figma 结构映射到 React 组件树与路由骨架', meta: 'figma→react', type: 'info' },
+    { step: 1, text: '设计令牌同步 — 颜色 / 间距 / 字号校验通过，组件库一致性锁定', meta: 'tokens.ok', type: 'success' },
+    { step: 1, text: '可用性快速评估完成 — 关键路径减少 2 步，关键 CTA 对比度达标', meta: 'ux.check', type: 'success' },
+    { step: 2, text: '代码生成引擎启动 — 目标栈 React + Vite + 云原生服务分层', meta: 'codegen', type: 'system' },
+    { step: 2, text: '组件树与 API 层构建中 — 前端 64% · 服务端 51% · 契约对齐中', meta: 'build 64%', type: 'info' },
+    { step: 2, text: '全栈代码生成完成 — 187 files / 12,430 LOC，模块边界与依赖图已写入', meta: '187 files', type: 'info' },
+    { step: 2, text: 'AI Code Review 通过 — 0 critical / 2 suggestion，安全扫描无阻断项', meta: 'review.ok', type: 'success' },
+    { step: 3, text: '测试智能体启动 — 自动补齐单元、集成与端到端回归用例', meta: 'qa.boot', type: 'system' },
+    { step: 3, text: '单元测试全部通过 — 246/246 green，关键路径断言覆盖完成', meta: 'unit 246', type: 'success' },
+    { step: 3, text: 'E2E 回归通过 — 32/32 scenarios · 覆盖率 94.2% · 冒烟门禁开启', meta: 'e2e 94.2%', type: 'success' },
+    { step: 3, text: '智能缺陷修复完成 — 捕获 2 个边缘态并自动提交热修补丁', meta: 'fix×2', type: 'info' },
+    { step: 4, text: 'CI/CD 流水线触发 — 构建多架构生产镜像并执行供应连签名', meta: 'ci.trigger', type: 'system' },
+    { step: 4, text: '镜像构建与推送完成 — registry 校验通过，版本标签 v2.3.1-prod', meta: 'image.push', type: 'info' },
+    { step: 4, text: 'K8s 滚动更新进行中 — 金丝雀 10% → 50% → 100%，流量无损切换', meta: 'rollout', type: 'info' },
+    { step: 4, text: '部署成功 — 健康检查全部通过，生产环境已接管真实流量', meta: 'prod.live', type: 'success' },
+    { step: 4, text: 'AI 监控激活 — 追踪 200+ 指标：延迟、错误率、饱和度与业务漏斗', meta: 'otel.on', type: 'success' },
   ]
 
-  // Auto-scroll log container (NOT the page)
   useEffect(() => {
     const el = logContainerRef.current
-    if (el) {
-      el.scrollTop = el.scrollHeight
-    }
+    if (el) el.scrollTop = el.scrollHeight
   }, [visibleLines])
 
-  // Core animation loop — runs once, drives steps via timer chain.
-  // `index` is a plain ref (not React state) so the schedule is the single
-  // source of truth — state updaters below stay pure (no setTimeout/setState
-  // inside them), since React StrictMode double-invokes updater functions in
-  // dev to catch exactly that kind of impurity, which was silently doubling
-  // the animation speed.
   useEffect(() => {
     let cancelled = false
     let index = 0
+    const runId = ++runIdRef.current
+
+    const resetAndLoop = () => {
+      if (cancelled || runId !== runIdRef.current) return
+      setDone(true)
+      timerRef.current = setTimeout(() => {
+        if (cancelled || runId !== runIdRef.current) return
+        setDone(false)
+        setVisibleLines([])
+        setActiveStep(0)
+        index = 0
+        timerRef.current = setTimeout(addNextLine, 600)
+      }, 2200)
+    }
 
     const addNextLine = () => {
-      if (cancelled || index >= allLogs.length) return
-
+      if (cancelled || runId !== runIdRef.current) return
+      if (index >= allLogs.length) {
+        resetAndLoop()
+        return
+      }
       const log = allLogs[index]
       if (index === 0 || allLogs[index - 1].step !== log.step) {
         setActiveStep(log.step)
       }
       setVisibleLines(prev => [...prev, log])
       index += 1
-
-      if (index >= allLogs.length) return
-
+      if (index >= allLogs.length) {
+        timerRef.current = setTimeout(resetAndLoop, 400)
+        return
+      }
       const isLastInStep = allLogs[index].step !== log.step
-      const delay = isLastInStep ? 1500 : (stepTimings[log.step] || 900)
+      const delay = isLastInStep ? 1200 : (stepTimings[log.step] || 800)
       timerRef.current = setTimeout(addNextLine, delay)
     }
 
-    // Start after 800ms delay
-    timerRef.current = setTimeout(addNextLine, 800)
-
+    timerRef.current = setTimeout(addNextLine, 500)
     return () => {
       cancelled = true
       if (timerRef.current) clearTimeout(timerRef.current)
     }
   }, [])
 
+  const progress = Math.round(((activeStep + (done ? 1 : 0.35)) / steps.length) * 100)
+  const clampedProgress = Math.min(100, Math.max(8, progress))
+
   return (
-    <div style={{
-      position: 'relative',
-      zIndex: 10,
-      width: '100%',
-      maxWidth: 440,
-      transition: 'all 0.3s ease',
-    }}>
-      {!minimized && (
-        <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="ai-window-card"
-          style={{
-            width: '100%', maxWidth: 440, maxHeight: 360,
-            background: 'var(--vb-terminal-bg)',
-            backdropFilter: 'blur(10px) saturate(110%)',
-            WebkitBackdropFilter: 'blur(10px) saturate(110%)',
-            borderRadius: 16,
-            border: '1px solid var(--vb-terminal-border)',
-            boxShadow: 'none',
-            overflow: 'hidden',
-            marginBottom: 12,
-          }}
-        >
-          {/* Header */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 14px',
-            borderBottom: '1px solid var(--vb-terminal-border)',
-            background: 'transparent',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 5, opacity: 0.55 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff5f56' }} />
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ffbd2e' }} />
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#27c93f' }} />
-              </div>
-              <span style={{
-                fontSize: 12, fontFamily: 'var(--font-mono)',
-                color: 'var(--text-muted)',
-                marginLeft: 8, letterSpacing: '0.02em',
-                opacity: 0.7,
-              }}>
-                AI E2E Pipeline — zzyet.com
-              </span>
+    <motion.div
+      className="ai-pipeline"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] }}
+    >
+      <div className="ai-pipeline-card">
+        <div className="ai-pipeline-header">
+          <div className="ai-pipeline-header-left">
+            <span className="ai-pipeline-dots" aria-hidden="true"><i /><i /><i /></span>
+            <div className="ai-pipeline-heading">
+              <span className="ai-pipeline-title">AI E2E Pipeline</span>
+              <span className="ai-pipeline-sub">zzyet.com · end-to-end delivery</span>
             </div>
-            <button
-              onClick={() => setMinimized(true)}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-muted)', padding: 2,
-                opacity: 0.55,
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M4 12L12 4M12 4H6M12 4V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </div>
+          <div className="ai-pipeline-header-right">
+            <span className={`ai-pipeline-live${done ? ' done' : ''}`}>
+              <i />{done ? 'SHIPPED' : 'RUNNING'}
+            </span>
+            <span className="ai-pipeline-pct">{clampedProgress}%</span>
+          </div>
+        </div>
+
+        <div className="ai-pipeline-bar" aria-hidden="true">
+          <div className="ai-pipeline-bar-fill" style={{ width: `${clampedProgress}%` }} />
+        </div>
+
+        <div className="ai-pipeline-hero">
+          <h1 className="ai-pipeline-hero-title">
+            Ideas
+            <span className="hero-arrow" aria-hidden="true">
+              <svg viewBox="0 0 72 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="heroArrowGrad" x1="0" y1="12" x2="72" y2="12" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#7c5cff" stopOpacity="0.25" />
+                    <stop offset="0.5" stopColor="#a855f7" />
+                    <stop offset="1" stopColor="#06b6d4" />
+                  </linearGradient>
+                </defs>
+                <circle cx="3.5" cy="12" r="1.4" fill="url(#heroArrowGrad)" opacity="0.28" />
+                <circle cx="10" cy="12" r="1.7" fill="url(#heroArrowGrad)" opacity="0.4" />
+                <circle cx="17" cy="12" r="2" fill="url(#heroArrowGrad)" opacity="0.52" />
+                <circle cx="24.5" cy="12" r="2.3" fill="url(#heroArrowGrad)" opacity="0.66" />
+                <circle cx="32.5" cy="12" r="2.7" fill="url(#heroArrowGrad)" opacity="0.82" />
+                <path
+                  d="M40 5.5 52 12 40 18.5"
+                  stroke="url(#heroArrowGrad)"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M50 5.5 62 12 50 18.5"
+                  stroke="url(#heroArrowGrad)"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
-            </button>
+            </span>
+            Software
+            <br />
+            <span className="hero-em">Faster</span>
+          </h1>
+          <p className="ai-pipeline-hero-tagline">
+            让每一个想法，更快成为可交付的软件。
+          </p>
+          <div className="ai-pipeline-hero-stats">
+            <span><CountUp value={10} suffix="×" /> 更快交付</span>
+            <span className="hero-mini-stats-sep">/</span>
+            <span><CountUp value={92} suffix="%" /> 更少缺陷</span>
+            <span className="hero-mini-stats-sep">/</span>
+            <span><CountUp value={60} suffix="%" /> 更低成本</span>
           </div>
+          <p className="ai-pipeline-hero-stats-note">基于内部交付项目的综合估算</p>
+        </div>
 
-          {/* Step indicators */}
-          <div style={{
-            display: 'flex', gap: 4, padding: '8px 14px',
-            borderBottom: '1px solid var(--vb-terminal-border)',
-            background: 'transparent',
-          }}>
-            {steps.map((step, i) => (
-              <div key={step.label}
-                style={{
-                  flex: 1, textAlign: 'center',
-                  padding: '3px 2px',
-                  borderRadius: 6,
-                  fontSize: 10,
-                  fontWeight: i <= activeStep ? 600 : 400,
-                  fontFamily: 'var(--font-sans)',
-                  color: i <= activeStep ? 'var(--vb-terminal-accent, #a78bfa)' : 'var(--text-muted)',
-                  background: i <= activeStep ? 'rgba(124,92,255,0.06)' : 'transparent',
-                  transition: 'all 0.3s ease',
-                  opacity: i <= activeStep ? 1 : 0.72,
-                }}
-              >
-                <div style={{ fontSize: 13, marginBottom: 1 }}>{step.icon}</div>
-                {step.label}
-              </div>
-            ))}
-          </div>
+        <ol className="ai-pipeline-timeline" aria-label="交付阶段">
+          {steps.map((step, i) => (
+            <li
+              key={step.label}
+              className={`ai-pipeline-node${i < activeStep || done ? ' done' : ''}${i === activeStep && !done ? ' active' : ''}`}
+              style={{ '--step-color': step.color }}
+            >
+              <span className="ai-pipeline-node-index">{String(i + 1).padStart(2, '0')}</span>
+              <span className="ai-pipeline-node-label">{step.label}</span>
+              {i < steps.length - 1 && <span className="ai-pipeline-node-link" />}
+            </li>
+          ))}
+        </ol>
 
-          {/* Log output */}
-          <div style={{
-            padding: '10px 14px',
-            minHeight: 160,
-            maxHeight: 200,
-            overflowY: 'auto',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            lineHeight: 1.7,
-            letterSpacing: '0.01em',
-          }} className="vb-log-scroll ai-window-log" ref={logContainerRef}>
-            {visibleLines.map((log, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-                style={{
-                  color: log.type === 'success' ? 'var(--vb-log-success, #27c93f)'
-                       : log.type === 'system' ? 'var(--vb-log-system, #a78bfa)'
-                       : 'var(--vb-log-info, #a0a0b8)',
-                }}
-              >
-                {log.text}
-              </motion.div>
-            ))}
-            {visibleLines.length < allLogs.length && (
-              <span style={{
-                display: 'inline-block', width: 8, height: 14,
-                background: 'var(--vb-cursor, #a78bfa)',
-                animation: 'vbBlink 0.8s step-end infinite',
-                verticalAlign: 'middle', marginLeft: 2,
-              }} />
-            )}
-          </div>
-        </motion.div>
-      )}
+        <div className="ai-pipeline-log vb-log-scroll" id="pipeline-log" ref={logContainerRef}>
+          {visibleLines.map((log, i) => (
+            <motion.div
+              key={`${log.step}-${i}-${log.text}`}
+              className={`ai-pipeline-line type-${log.type}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              <span className="ai-pipeline-line-prefix">
+                {log.type === 'success' ? '✓' : log.type === 'system' ? '›' : '·'}
+              </span>
+              <span className="ai-pipeline-line-text">{log.text}</span>
+              <span className="ai-pipeline-line-meta">{log.meta}</span>
+            </motion.div>
+          ))}
+          {!done && <span className="ai-pipeline-cursor" />}
+        </div>
 
-      {/* Minimized button */}
-      {minimized && (
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          onClick={() => setMinimized(false)}
-          whileHover={{ scale: 1.08 }}
-          style={{
-            width: 48, height: 48,
-            borderRadius: 12,
-            background: 'var(--vb-button-bg, rgba(124,92,255,0.90))',
-            border: '1px solid var(--vb-terminal-border, rgba(124,92,255,0.30))',
-            cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: 'var(--vb-terminal-shadow, 0 4px 24px rgba(124,92,255,0.25))',
-            color: '#fff',
-            transition: 'all 0.3s ease',
-          }}
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <rect x="2" y="3" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M6 7h8M6 10h5M6 13h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        </motion.button>
-      )}
-    </div>
+        <div className="ai-pipeline-footer">
+          <span>{done ? '交付完成' : `当前阶段 · ${steps[activeStep].label}`}</span>
+          <span>{visibleLines.length} events</span>
+          <span>latency 12ms</span>
+        </div>
+      </div>
+    </motion.div>
   )
 }
 
@@ -618,31 +600,41 @@ function Navbar() {
   return (
     <nav className={`nav ${scrolled ? 'scrolled' : ''}`}>
       <div className="container nav-inner">
-        <a href="#" className="nav-logo" style={{ textDecoration: 'none' }}>
+        <a href="/" className="nav-logo" style={{ textDecoration: 'none' }}>
           造翼科技
         </a>
-        <button
-          className="mobile-menu-btn"
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Toggle menu"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            {menuOpen
-              ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
-              : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
-            }
-          </svg>
-        </button>
         <ul className={`nav-links ${menuOpen ? 'open' : ''}`}>
-          <li><a href="#playground" onClick={() => setMenuOpen(false)}>试玩</a></li>
           <li><a href="#pipeline" onClick={() => setMenuOpen(false)}>全流程</a></li>
           <li><a href="#advantages" onClick={() => setMenuOpen(false)}>AI 优势</a></li>
           <li><a href="#value" onClick={() => setMenuOpen(false)}>端到端价值</a></li>
           <li><a href="#compare" onClick={() => setMenuOpen(false)}>对比</a></li>
-          <li><a href="#github" onClick={() => setMenuOpen(false)}>开源</a></li>
           <li><a href="#cta" onClick={() => setMenuOpen(false)}>联系</a></li>
         </ul>
-        <ThemeToggle />
+        <div className="nav-actions">
+          <a
+            href="https://t.me/Morty_an"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary nav-cta"
+            onClick={() => setMenuOpen(false)}
+          >
+            预约咨询
+          </a>
+          <ThemeToggle />
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? '关闭菜单' : '打开菜单'}
+            aria-expanded={menuOpen}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              {menuOpen
+                ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+                : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+              }
+            </svg>
+          </button>
+        </div>
       </div>
     </nav>
   )
@@ -670,40 +662,6 @@ function CountUp({ value, suffix = '', duration = 1.4 }) {
   }, [inView, value, duration])
 
   return <span ref={ref}>{display}{suffix}</span>
-}
-
-// ─── Magnetic button — nudges toward the cursor within its bounds ──────────
-function MagneticButton({ children, className, href, target, rel }) {
-  const ref = useRef(null)
-  const x = useMotionValue(0)
-  const y = useMotionValue(0)
-  const springX = useSpring(x, { stiffness: 200, damping: 14, mass: 0.3 })
-  const springY = useSpring(y, { stiffness: 200, damping: 14, mass: 0.3 })
-
-  const handleMouseMove = (e) => {
-    const rect = ref.current.getBoundingClientRect()
-    x.set((e.clientX - rect.left - rect.width / 2) * 0.35)
-    y.set((e.clientY - rect.top - rect.height / 2) * 0.35)
-  }
-  const handleMouseLeave = () => {
-    x.set(0)
-    y.set(0)
-  }
-
-  return (
-    <motion.a
-      ref={ref}
-      href={href}
-      target={target}
-      rel={rel}
-      className={className}
-      style={{ x: springX, y: springY }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-    >
-      {children}
-    </motion.a>
-  )
 }
 
 // ─── Hero ────────────────────────────────────────────────────────────────────
@@ -738,66 +696,8 @@ function Hero() {
         className="hero-stage"
         style={{ opacity: heroOpacity, y: heroY }}
       >
-        <div className="container hero-layout">
-          <div className="hero-minimal-inner">
-            <motion.h1
-              initial={{ opacity: 0, y: 28 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.08, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="hero-title hero-title-mega"
-            >
-              Ideas <span className="hero-arrow">→</span> Software
-              <br />
-              <span className="hero-em">Faster.</span>
-            </motion.h1>
-
-            <motion.p
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.28 }}
-              className="hero-tagline"
-            >
-              让每一个想法，更快成为可交付的软件。
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.42 }}
-              className="hero-actions"
-            >
-              <MagneticButton href="#pipeline" className="btn btn-primary hero-btn-lg">
-                看交付全流程
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-              </MagneticButton>
-              <a href="https://t.me/Morty_an" target="_blank" rel="noopener noreferrer" className="hero-text-link">
-                预约演示
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </a>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.56 }}
-              className="hero-mini-stats"
-            >
-              <span><CountUp value={10} suffix="×" /> 更快交付</span>
-              <span className="hero-mini-stats-sep">/</span>
-              <span><CountUp value={92} suffix="%" /> 更少缺陷</span>
-              <span className="hero-mini-stats-sep">/</span>
-              <span><CountUp value={60} suffix="%" /> 更低成本</span>
-            </motion.div>
-          </div>
-
-          <motion.div
-            className="hero-visual"
-            initial={{ opacity: 0, x: 28 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.7, delay: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
-          >
-            <AICodingWindow />
-          </motion.div>
+        <div className="container hero-layout hero-layout-stack">
+          <AICodingWindow />
         </div>
       </motion.div>
 
@@ -806,216 +706,6 @@ function Hero() {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
       </a>
     </section>
-  )
-}
-
-// ─── Snake mini-game — real directional control, roams the full board ──────
-function SnakeGame() {
-  const canvasRef = useRef(null)
-  const startRef = useRef(() => {})
-  const [status, setStatus] = useState('idle') // idle | playing | over
-  const [finalScore, setFinalScore] = useState(0)
-  const [highScore, setHighScore] = useState(() => Number(localStorage.getItem('zaoyi-snake-highscore') || 0))
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    let width = 0, height = 0, cell = 18, cols = 0, rows = 0
-
-    const resize = () => {
-      const dpr = window.devicePixelRatio || 1
-      width = canvas.clientWidth
-      height = canvas.clientHeight
-      canvas.width = width * dpr
-      canvas.height = height * dpr
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      cell = Math.max(14, Math.floor(Math.min(width / 32, height / 11)))
-      cols = Math.max(6, Math.floor(width / cell))
-      rows = Math.max(6, Math.floor(height / cell))
-    }
-    resize()
-    window.addEventListener('resize', resize)
-
-    let phase = 'idle'
-    let snake, dir, nextDir, food, tickMs, acc, lastTs, raf, score
-
-    const randCell = () => ({ x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) })
-    const placeFood = () => {
-      let f, tries = 0
-      do { f = randCell(); tries++ } while (snake.some(s => s.x === f.x && s.y === f.y) && tries < 200)
-      food = f
-    }
-
-    const resetGame = () => {
-      const cx = Math.floor(cols / 2), cy = Math.floor(rows / 2)
-      snake = [{ x: cx - 1, y: cy }, { x: cx - 2, y: cy }, { x: cx - 3, y: cy }]
-      dir = { x: 1, y: 0 }
-      nextDir = { x: 1, y: 0 }
-      tickMs = 135
-      acc = 0
-      lastTs = null
-      score = 0
-      placeFood()
-    }
-    resetGame()
-
-    const start = () => {
-      if (phase === 'idle' || phase === 'over') {
-        resetGame()
-        phase = 'playing'
-        setStatus('playing')
-      }
-    }
-    startRef.current = start
-
-    const setDir = (dx, dy) => {
-      if (phase !== 'playing') { start(); return }
-      if (dx === -dir.x && dy === -dir.y) return
-      nextDir = { x: dx, y: dy }
-    }
-
-    const KEY_MAP = {
-      ArrowUp: [0, -1], KeyW: [0, -1],
-      ArrowDown: [0, 1], KeyS: [0, 1],
-      ArrowLeft: [-1, 0], KeyA: [-1, 0],
-      ArrowRight: [1, 0], KeyD: [1, 0],
-    }
-    const onKey = (e) => {
-      if (KEY_MAP[e.code]) {
-        e.preventDefault()
-        setDir(...KEY_MAP[e.code])
-      } else if (e.code === 'Space') {
-        e.preventDefault()
-        start()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-
-    let touchStart = null
-    const onTouchStart = (e) => { touchStart = e.changedTouches[0] }
-    const onTouchEnd = (e) => {
-      if (!touchStart) { start(); return }
-      const t = e.changedTouches[0]
-      const dx = t.clientX - touchStart.clientX
-      const dy = t.clientY - touchStart.clientY
-      if (Math.abs(dx) < 18 && Math.abs(dy) < 18) { start() }
-      else if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0)
-      else setDir(0, dy > 0 ? 1 : -1)
-      touchStart = null
-    }
-    canvas.addEventListener('touchstart', onTouchStart, { passive: true })
-    canvas.addEventListener('touchend', onTouchEnd, { passive: true })
-    const onPointer = () => { if (phase !== 'playing') start() }
-    canvas.addEventListener('pointerdown', onPointer)
-
-    const loop = (ts) => {
-      if (phase === 'playing') {
-        if (lastTs === null) lastTs = ts
-        acc += Math.min(ts - lastTs, 200)
-        lastTs = ts
-        while (acc >= tickMs) {
-          acc -= tickMs
-          dir = nextDir
-          const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y }
-          if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) { phase = 'over'; break }
-          const eating = head.x === food.x && head.y === food.y
-          const body = eating ? snake : snake.slice(0, -1)
-          if (body.some(s => s.x === head.x && s.y === head.y)) { phase = 'over'; break }
-          snake.unshift(head)
-          if (eating) {
-            score += 1
-            tickMs = Math.max(75, tickMs - 2.5)
-            placeFood()
-          } else {
-            snake.pop()
-          }
-        }
-        if (phase === 'over') {
-          const prevHs = Number(localStorage.getItem('zaoyi-snake-highscore') || 0)
-          const hs = Math.max(prevHs, score)
-          localStorage.setItem('zaoyi-snake-highscore', String(hs))
-          setFinalScore(score)
-          setHighScore(hs)
-          setStatus('over')
-        }
-      } else {
-        lastTs = null
-      }
-
-      const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-      ctx.clearRect(0, 0, width, height)
-
-      // Idle state still shows a faded static preview of the snake so the
-      // box reads as "game waiting to start" rather than an empty rectangle.
-      const isIdle = phase === 'idle'
-      ctx.globalAlpha = isIdle ? 0.32 : 1
-
-      const fx = food.x * cell + cell / 2, fy = food.y * cell + cell / 2
-      ctx.fillStyle = '#f59e0b'
-      ctx.beginPath()
-      ctx.arc(fx, fy, cell * 0.26, 0, Math.PI * 2)
-      ctx.fill()
-
-      const pad = Math.max(1.5, cell * 0.08)
-      const r = Math.max(3, cell * 0.24)
-      snake.forEach((s, i) => {
-        const t = i / Math.max(snake.length - 1, 1)
-        ctx.fillStyle = i === 0
-          ? (isDark ? '#a78bfa' : '#7c5cff')
-          : `rgba(124,92,255,${0.85 - t * 0.5})`
-        const x = s.x * cell + pad, y = s.y * cell + pad, w = cell - pad * 2, h = cell - pad * 2
-        ctx.beginPath()
-        if (ctx.roundRect) ctx.roundRect(x, y, w, h, r)
-        else ctx.rect(x, y, w, h)
-        ctx.fill()
-      })
-
-      ctx.globalAlpha = 1
-
-      if (phase !== 'idle') {
-        ctx.font = '600 13px "Source Code Pro", ui-monospace, Menlo, Consolas, monospace'
-        ctx.fillStyle = isDark ? 'rgba(240,240,245,0.75)' : 'rgba(26,26,46,0.65)'
-        ctx.textAlign = 'right'
-        ctx.fillText(`分数 ${score}`, width - 12, 20)
-        ctx.textAlign = 'left'
-      }
-
-      raf = requestAnimationFrame(loop)
-    }
-    raf = requestAnimationFrame(loop)
-
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', resize)
-      window.removeEventListener('keydown', onKey)
-      canvas.removeEventListener('touchstart', onTouchStart)
-      canvas.removeEventListener('touchend', onTouchEnd)
-      canvas.removeEventListener('pointerdown', onPointer)
-    }
-  }, [])
-
-  return (
-    <div className="hero-game-wrap" id="playground">
-      <div className="hero-game-caption">
-        <span>🐍 方向键 / WASD 控制，手机端可滑动切换方向</span>
-        <span>最高分 {highScore}</span>
-      </div>
-      <div className="hero-game-canvas-wrap">
-        <canvas ref={canvasRef} className="hero-game-canvas" />
-        {status !== 'playing' && (
-          <div className="hero-game-overlay">
-            {status === 'idle' ? (
-              <button className="btn btn-primary" onClick={() => startRef.current()}>开始游戏</button>
-            ) : (
-              <>
-                <span className="hero-game-overlay-text">游戏结束 · 得分 {finalScore}</span>
-                <button className="btn btn-primary" onClick={() => startRef.current()}>再玩一次</button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
   )
 }
 
@@ -1268,120 +958,6 @@ function ValueProps() {
   )
 }
 
-// ─── GitHub Showcase ──────────────────────────────────────────────────────────
-function GitHubShowcase() {
-  return (
-    <section id="github" className="section section-alt">
-      <div className="container">
-        <ScrollReveal>
-          <span className="badge">开源透明</span>
-          <h2 className="section-title" style={{ marginTop: 16 }}>
-            用 AI 开发的<span className="gradient-text">代码</span>，全部开源
-          </h2>
-          <p className="section-subtitle">
-            造翼科技官网本身由 AI 驱动开发——React + Vite + Framer Motion，代码托管在 GitHub，每一行都可审查。
-          </p>
-        </ScrollReveal>
-
-        <ScrollReveal delay={0.15}>
-          <div style={{ marginTop: 40, display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <a
-              href="https://github.com/zzyet/zaoyi-website"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ textDecoration: 'none' }}
-            >
-              <motion.div
-                className="card"
-                whileHover={{ y: -4 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 16,
-                  padding: '20px 28px',
-                  minWidth: 280,
-                }}
-              >
-                <div style={{
-                  width: 44, height: 44,
-                  borderRadius: 'var(--radius)',
-                  background: 'var(--bg-alt)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--text-heading)">
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/>
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-heading)', marginBottom: 4 }}>
-                    zaoyi-website
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    github.com/zzyet/zaoyi-website
-                  </div>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
-                  <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </motion.div>
-            </a>
-
-            <a
-              href="https://github.com/zzyet"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ textDecoration: 'none' }}
-            >
-              <motion.div
-                className="card"
-                whileHover={{ y: -4 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 16,
-                  padding: '20px 28px',
-                  minWidth: 280,
-                }}
-              >
-                <div style={{
-                  width: 44, height: 44,
-                  borderRadius: 'var(--radius)',
-                  background: 'var(--gradient)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                    <rect x="3" y="3" width="18" height="18" rx="3"/>
-                    <line x1="9" y1="9" x2="15" y2="9"/>
-                    <line x1="9" y1="13" x2="15" y2="13"/>
-                    <line x1="9" y1="17" x2="12" y2="17"/>
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-heading)', marginBottom: 4 }}>
-                    更多 AI 开源项目
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    github.com/zzyet
-                  </div>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
-                  <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </motion.div>
-            </a>
-          </div>
-        </ScrollReveal>
-      </div>
-    </section>
-  )
-}
-
 // ─── Comparison Table ────────────────────────────────────────────────────────
 const compareRows = [
   { label: '需求到上线周期', traditional: '2-6 个月', ai: '3-14 天', aiWin: true },
@@ -1453,27 +1029,26 @@ function CTA() {
   return (
     <section id="cta" className="cta-section">
       <div className="container">
-        <ScrollReveal>
+        <ScrollReveal className="cta-panel">
           <span className="badge">立即开始</span>
           <h2 className="cta-title" style={{ marginTop: 16 }}>
-            准备好用 AI 重构你的
-            <br />
-            <span className="gradient-text">软件开发方式</span>了吗？
+            Ready to Build with <span className="gradient-text">AI</span>?
           </h2>
           <p className="cta-subtitle">
-            告诉我们你的想法，剩下的交给 造翼科技。
+            从创意到产品，
+            <br />
+            让 AI 与专业工程团队共同加速你的软件交付。
           </p>
 
           <motion.div
-            style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}
+            className="cta-actions"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2, duration: 0.5 }}
           >
             <a href="https://t.me/Morty_an" target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ padding: '16px 40px', fontSize: 16 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.46-1.901-.903-1.056-.692-1.653-1.123-2.678-1.799-1.185-.781-.417-1.21.258-1.911.177-.184 3.247-2.977 3.307-3.23.007-.032.015-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.441-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.333-1.386 4.025-1.627 4.476-1.635.1-.002.321.023.465.141.119.098.152.228.168.32.016.093.036.305.02.472z"/></svg>
-              预约免费咨询
+              Start Your Project
             </a>
           </motion.div>
         </ScrollReveal>
@@ -1487,10 +1062,12 @@ function Footer() {
   return (
     <footer className="footer">
       <div className="container">
-        <p style={{ marginBottom: 8 }}>© {new Date().getFullYear()} 造翼科技 ZaoYi Tech. AI 原生端到端软件开发.</p>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          联系：<a href="https://t.me/Morty_an" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>@Morty_an</a>
-        </p>
+        <div className="footer-panel">
+          <p className="footer-copy">© {new Date().getFullYear()} 造翼科技 ZaoYi Tech. AI 原生端到端软件开发.</p>
+          <p className="footer-contact">
+            联系：<a href="https://t.me/Morty_an" target="_blank" rel="noopener noreferrer">@Morty_an</a>
+          </p>
+        </div>
       </div>
     </footer>
   )
@@ -1509,7 +1086,6 @@ export default function App() {
           <AdvantageCards />
           <ValueProps />
           <ComparisonTable />
-          <GitHubShowcase />
           <CTA />
         </main>
         <Footer />
