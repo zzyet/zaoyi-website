@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext } from 'react'
-import { motion, useScroll, useTransform, useInView } from 'framer-motion'
+import { motion, useScroll, useTransform, useInView, useMotionValue, useSpring } from 'framer-motion'
 
 // ─── Theme Context ──────────────────────────────────────────────────────────
 const ThemeContext = createContext({ theme: 'light', toggleTheme: () => {} })
@@ -271,7 +271,6 @@ function AICodingWindow() {
   const [visibleLines, setVisibleLines] = useState([])
   const timerRef = useRef(null)
   const logContainerRef = useRef(null)
-  const initializedRef = useRef(false)
 
   const steps = [
     { label: '需求分析', icon: '📋', color: '#7c5cff' },
@@ -314,43 +313,31 @@ function AICodingWindow() {
     }
   }, [visibleLines])
 
-  // Core animation loop — runs once, drives steps via timer chain
+  // Core animation loop — runs once, drives steps via timer chain.
+  // `index` is a plain ref (not React state) so the schedule is the single
+  // source of truth — state updaters below stay pure (no setTimeout/setState
+  // inside them), since React StrictMode double-invokes updater functions in
+  // dev to catch exactly that kind of impurity, which was silently doubling
+  // the animation speed.
   useEffect(() => {
-    if (initializedRef.current) return
-    initializedRef.current = true
-
     let cancelled = false
+    let index = 0
 
     const addNextLine = () => {
-      if (cancelled) return
+      if (cancelled || index >= allLogs.length) return
 
-      setVisibleLines(prev => {
-        const totalSoFar = prev.length
-        if (totalSoFar >= allLogs.length) return prev
+      const log = allLogs[index]
+      if (index === 0 || allLogs[index - 1].step !== log.step) {
+        setActiveStep(log.step)
+      }
+      setVisibleLines(prev => [...prev, log])
+      index += 1
 
-        return [...prev, allLogs[totalSoFar]]
-      })
+      if (index >= allLogs.length) return
 
-      setVisibleLines(prev => {
-        const total = prev.length
-        if (total >= allLogs.length) return prev
-
-        const nextLog = allLogs[total]
-        // Check if last line of current step — advance step after delay
-        const stepLines = allLogs.filter(l => l.step === nextLog.step)
-        const linesDoneInStep = prev.filter(l => l.step === nextLog.step).length + 1
-        const isLastInStep = linesDoneInStep >= stepLines.length
-
-        const delay = isLastInStep ? 1500 : (stepTimings[nextLog.step] || 900)
-        timerRef.current = setTimeout(addNextLine, delay)
-
-        // Update active step for header indicators
-        if (nextLog.step !== prev[prev.length - 1]?.step) {
-          setActiveStep(nextLog.step)
-        }
-
-        return prev
-      })
+      const isLastInStep = allLogs[index].step !== log.step
+      const delay = isLastInStep ? 1500 : (stepTimings[log.step] || 900)
+      timerRef.current = setTimeout(addNextLine, delay)
     }
 
     // Start after 800ms delay
@@ -366,7 +353,8 @@ function AICodingWindow() {
     <div style={{
       position: 'relative',
       zIndex: 10,
-      flexShrink: 0,
+      width: '100%',
+      maxWidth: 380,
       transition: 'all 0.3s ease',
     }}>
       {!minimized && (
@@ -374,8 +362,9 @@ function AICodingWindow() {
           initial={{ opacity: 0, y: 20, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="ai-window-card"
           style={{
-            width: 380, maxHeight: 420,
+            width: '100%', maxWidth: 380, maxHeight: 420,
             background: 'var(--vb-terminal-bg, rgba(15,15,26,0.94))',
             backdropFilter: 'blur(24px) saturate(180%)',
             WebkitBackdropFilter: 'blur(24px) saturate(180%)',
@@ -449,13 +438,14 @@ function AICodingWindow() {
           {/* Log output */}
           <div style={{
             padding: '12px 16px',
+            minHeight: 200,
             maxHeight: 240,
             overflowY: 'auto',
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
             lineHeight: 1.8,
             letterSpacing: '0.01em',
-          }} className="vb-log-scroll" ref={logContainerRef}>
+          }} className="vb-log-scroll ai-window-log" ref={logContainerRef}>
             {visibleLines.map((log, i) => (
               <motion.div
                 key={i}
@@ -569,6 +559,7 @@ function Navbar() {
           </svg>
         </button>
         <ul className={`nav-links ${menuOpen ? 'open' : ''}`}>
+          <li><a href="#playground" onClick={() => setMenuOpen(false)}>试玩</a></li>
           <li><a href="#pipeline" onClick={() => setMenuOpen(false)}>全流程</a></li>
           <li><a href="#advantages" onClick={() => setMenuOpen(false)}>AI 优势</a></li>
           <li><a href="#value" onClick={() => setMenuOpen(false)}>端到端价值</a></li>
@@ -582,28 +573,106 @@ function Navbar() {
   )
 }
 
+// ─── Count-up number (animates 0 → value once it scrolls into view) ────────
+function CountUp({ value, suffix = '', duration = 1.4 }) {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: '-40px' })
+  const [display, setDisplay] = useState(0)
+
+  useEffect(() => {
+    if (!inView) return
+    let raf
+    let start = null
+    const step = (ts) => {
+      if (start === null) start = ts
+      const progress = Math.min((ts - start) / (duration * 1000), 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplay(Math.round(value * eased))
+      if (progress < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [inView, value, duration])
+
+  return <span ref={ref}>{display}{suffix}</span>
+}
+
+// ─── Magnetic button — nudges toward the cursor within its bounds ──────────
+function MagneticButton({ children, className, href, target, rel }) {
+  const ref = useRef(null)
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const springX = useSpring(x, { stiffness: 200, damping: 14, mass: 0.3 })
+  const springY = useSpring(y, { stiffness: 200, damping: 14, mass: 0.3 })
+
+  const handleMouseMove = (e) => {
+    const rect = ref.current.getBoundingClientRect()
+    x.set((e.clientX - rect.left - rect.width / 2) * 0.35)
+    y.set((e.clientY - rect.top - rect.height / 2) * 0.35)
+  }
+  const handleMouseLeave = () => {
+    x.set(0)
+    y.set(0)
+  }
+
+  return (
+    <motion.a
+      ref={ref}
+      href={href}
+      target={target}
+      rel={rel}
+      className={className}
+      style={{ x: springX, y: springY }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      {children}
+    </motion.a>
+  )
+}
+
 // ─── Hero ────────────────────────────────────────────────────────────────────
 function Hero() {
   const { scrollY } = useScroll()
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0])
   const heroY = useTransform(scrollY, [0, 400], [0, 60])
 
+  // Mouse-reactive parallax for the background glow orbs
+  const mouseX = useMotionValue(0)
+  const mouseY = useMotionValue(0)
+  const smoothX = useSpring(mouseX, { stiffness: 40, damping: 20 })
+  const smoothY = useSpring(mouseY, { stiffness: 40, damping: 20 })
+  const orb1X = useTransform(smoothX, v => v * -36)
+  const orb1Y = useTransform(smoothY, v => v * -24)
+  const orb2X = useTransform(smoothX, v => v * 28)
+  const orb2Y = useTransform(smoothY, v => v * 20)
+
+  useEffect(() => {
+    const onMove = (e) => {
+      mouseX.set(e.clientX / window.innerWidth - 0.5)
+      mouseY.set(e.clientY / window.innerHeight - 0.5)
+    }
+    window.addEventListener('mousemove', onMove)
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [mouseX, mouseY])
+
   return (
-    <section style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+    <section className="hero">
+      <div className="hero-scrim" />
       <motion.div style={{ opacity: heroOpacity, y: heroY, width: '100%' }}>
-        <div className="container" style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-end', gap: 40, flexWrap: 'wrap' }}>
+        <div className="container hero-row">
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
+            initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-            style={{ maxWidth: 680, flex: '1 1 400px' }}
+            className="hero-copy-block"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2, duration: 0.5 }}
             >
-              <span className="badge" style={{ marginBottom: 28, display: 'inline-flex' }}>
+              <span className="badge hero-badge" style={{ marginBottom: 22, display: 'inline-flex' }}>
                 <span className="badge-dot" />
                 AI 原生端到端软件开发
               </span>
@@ -624,48 +693,298 @@ function Hero() {
               transition={{ delay: 0.5, duration: 0.6 }}
               className="hero-desc"
             >
-              造翼科技 将 AI 深度融入软件开发全生命周期——
-              从需求分析到产品设计、工程实现、质量保障、部署上线，
-              突破传统开发瓶颈，实现 <strong style={{ color: 'var(--accent)', fontWeight: 600 }}>10 倍速</strong> 端到端交付。
+              造翼科技 将 AI 深度融入软件开发全生命周期，突破传统开发瓶颈，实现 <strong style={{ color: 'var(--accent)', fontWeight: 600 }}>10 倍速</strong> 端到端交付。
             </motion.p>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.65, duration: 0.6 }}
-              style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}
+              className="hero-cta-row"
             >
-              <a href="#pipeline" className="btn btn-primary">
+              <MagneticButton href="#pipeline" className="btn btn-primary">
                 探索全流程
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-              </a>
+              </MagneticButton>
               <a href="https://t.me/Morty_an" target="_blank" rel="noopener noreferrer" className="btn btn-outline">
                 预约演示
               </a>
             </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8, duration: 0.6 }}
+              className="hero-stats"
+            >
+              <div className="hero-stat">
+                <span className="hero-stat-num" style={{ color: 'var(--accent)' }}><CountUp value={10} suffix="×" /></span>
+                <span className="hero-stat-label">开发速度提升</span>
+              </div>
+              <div className="hero-stat-divider" />
+              <div className="hero-stat">
+                <span className="hero-stat-num" style={{ color: 'var(--teal)' }}><CountUp value={92} suffix="%" /></span>
+                <span className="hero-stat-label">缺陷率降低</span>
+              </div>
+              <div className="hero-stat-divider" />
+              <div className="hero-stat">
+                <span className="hero-stat-num" style={{ color: 'var(--violet)' }}><CountUp value={60} suffix="%" /></span>
+                <span className="hero-stat-label">开发成本降低</span>
+              </div>
+            </motion.div>
           </motion.div>
-          <AICodingWindow />
+
+          <motion.div
+            initial={{ opacity: 0, x: 50, rotate: -3 }}
+            animate={{ opacity: 1, x: 0, rotate: 0 }}
+            transition={{ duration: 0.85, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="hero-visual"
+          >
+            <motion.div
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: 1.3 }}
+            >
+              <AICodingWindow />
+            </motion.div>
+          </motion.div>
         </div>
       </motion.div>
 
-      {/* Animated gradient orbs behind hero */}
-      <div className="hero-orb-1" style={{
+      <a href="#pipeline" className="hero-scroll-cue" aria-label="向下滚动查看更多">
+        <span>向下滚动</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 6L8 11L13 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </a>
+
+      {/* Animated gradient orbs behind hero — drift with cursor for parallax depth */}
+      <motion.div className="hero-orb-1" style={{
         position: 'absolute', top: '-20%', right: '-10%',
         width: '60vw', height: '60vw', maxWidth: 700, maxHeight: 700,
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(124,92,255,0.15) 0%, rgba(34,211,238,0.08) 40%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(124,92,255,0.3) 0%, rgba(34,211,238,0.18) 40%, transparent 70%)',
         pointerEvents: 'none',
         filter: 'blur(40px)',
+        x: orb1X, y: orb1Y,
       }} />
-      <div className="hero-orb-2" style={{
+      <motion.div className="hero-orb-2" style={{
         position: 'absolute', bottom: '-10%', left: '-5%',
         width: '40vw', height: '40vw', maxWidth: 500, maxHeight: 500,
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(168,85,247,0.12) 0%, rgba(124,92,255,0.06) 50%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(168,85,247,0.25) 0%, rgba(124,92,255,0.14) 50%, transparent 70%)',
         pointerEvents: 'none',
         filter: 'blur(40px)',
+        x: orb2X, y: orb2Y,
       }} />
     </section>
+  )
+}
+
+// ─── Snake mini-game — real directional control, roams the full board ──────
+function SnakeGame() {
+  const canvasRef = useRef(null)
+  const startRef = useRef(() => {})
+  const [status, setStatus] = useState('idle') // idle | playing | over
+  const [finalScore, setFinalScore] = useState(0)
+  const [highScore, setHighScore] = useState(() => Number(localStorage.getItem('zaoyi-snake-highscore') || 0))
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    let width = 0, height = 0, cell = 18, cols = 0, rows = 0
+
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1
+      width = canvas.clientWidth
+      height = canvas.clientHeight
+      canvas.width = width * dpr
+      canvas.height = height * dpr
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      cell = Math.max(14, Math.floor(Math.min(width / 32, height / 11)))
+      cols = Math.max(6, Math.floor(width / cell))
+      rows = Math.max(6, Math.floor(height / cell))
+    }
+    resize()
+    window.addEventListener('resize', resize)
+
+    let phase = 'idle'
+    let snake, dir, nextDir, food, tickMs, acc, lastTs, raf, score
+
+    const randCell = () => ({ x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) })
+    const placeFood = () => {
+      let f, tries = 0
+      do { f = randCell(); tries++ } while (snake.some(s => s.x === f.x && s.y === f.y) && tries < 200)
+      food = f
+    }
+
+    const resetGame = () => {
+      const cx = Math.floor(cols / 2), cy = Math.floor(rows / 2)
+      snake = [{ x: cx - 1, y: cy }, { x: cx - 2, y: cy }, { x: cx - 3, y: cy }]
+      dir = { x: 1, y: 0 }
+      nextDir = { x: 1, y: 0 }
+      tickMs = 135
+      acc = 0
+      lastTs = null
+      score = 0
+      placeFood()
+    }
+    resetGame()
+
+    const start = () => {
+      if (phase === 'idle' || phase === 'over') {
+        resetGame()
+        phase = 'playing'
+        setStatus('playing')
+      }
+    }
+    startRef.current = start
+
+    const setDir = (dx, dy) => {
+      if (phase !== 'playing') { start(); return }
+      if (dx === -dir.x && dy === -dir.y) return
+      nextDir = { x: dx, y: dy }
+    }
+
+    const KEY_MAP = {
+      ArrowUp: [0, -1], KeyW: [0, -1],
+      ArrowDown: [0, 1], KeyS: [0, 1],
+      ArrowLeft: [-1, 0], KeyA: [-1, 0],
+      ArrowRight: [1, 0], KeyD: [1, 0],
+    }
+    const onKey = (e) => {
+      if (KEY_MAP[e.code]) {
+        e.preventDefault()
+        setDir(...KEY_MAP[e.code])
+      } else if (e.code === 'Space') {
+        e.preventDefault()
+        start()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+
+    let touchStart = null
+    const onTouchStart = (e) => { touchStart = e.changedTouches[0] }
+    const onTouchEnd = (e) => {
+      if (!touchStart) { start(); return }
+      const t = e.changedTouches[0]
+      const dx = t.clientX - touchStart.clientX
+      const dy = t.clientY - touchStart.clientY
+      if (Math.abs(dx) < 18 && Math.abs(dy) < 18) { start() }
+      else if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0)
+      else setDir(0, dy > 0 ? 1 : -1)
+      touchStart = null
+    }
+    canvas.addEventListener('touchstart', onTouchStart, { passive: true })
+    canvas.addEventListener('touchend', onTouchEnd, { passive: true })
+    const onPointer = () => { if (phase !== 'playing') start() }
+    canvas.addEventListener('pointerdown', onPointer)
+
+    const loop = (ts) => {
+      if (phase === 'playing') {
+        if (lastTs === null) lastTs = ts
+        acc += Math.min(ts - lastTs, 200)
+        lastTs = ts
+        while (acc >= tickMs) {
+          acc -= tickMs
+          dir = nextDir
+          const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y }
+          if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) { phase = 'over'; break }
+          const eating = head.x === food.x && head.y === food.y
+          const body = eating ? snake : snake.slice(0, -1)
+          if (body.some(s => s.x === head.x && s.y === head.y)) { phase = 'over'; break }
+          snake.unshift(head)
+          if (eating) {
+            score += 1
+            tickMs = Math.max(75, tickMs - 2.5)
+            placeFood()
+          } else {
+            snake.pop()
+          }
+        }
+        if (phase === 'over') {
+          const prevHs = Number(localStorage.getItem('zaoyi-snake-highscore') || 0)
+          const hs = Math.max(prevHs, score)
+          localStorage.setItem('zaoyi-snake-highscore', String(hs))
+          setFinalScore(score)
+          setHighScore(hs)
+          setStatus('over')
+        }
+      } else {
+        lastTs = null
+      }
+
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+      ctx.clearRect(0, 0, width, height)
+
+      // Idle state still shows a faded static preview of the snake so the
+      // box reads as "game waiting to start" rather than an empty rectangle.
+      const isIdle = phase === 'idle'
+      ctx.globalAlpha = isIdle ? 0.32 : 1
+
+      const fx = food.x * cell + cell / 2, fy = food.y * cell + cell / 2
+      ctx.fillStyle = '#f59e0b'
+      ctx.beginPath()
+      ctx.arc(fx, fy, cell * 0.26, 0, Math.PI * 2)
+      ctx.fill()
+
+      const pad = Math.max(1.5, cell * 0.08)
+      const r = Math.max(3, cell * 0.24)
+      snake.forEach((s, i) => {
+        const t = i / Math.max(snake.length - 1, 1)
+        ctx.fillStyle = i === 0
+          ? (isDark ? '#a78bfa' : '#7c5cff')
+          : `rgba(124,92,255,${0.85 - t * 0.5})`
+        const x = s.x * cell + pad, y = s.y * cell + pad, w = cell - pad * 2, h = cell - pad * 2
+        ctx.beginPath()
+        if (ctx.roundRect) ctx.roundRect(x, y, w, h, r)
+        else ctx.rect(x, y, w, h)
+        ctx.fill()
+      })
+
+      ctx.globalAlpha = 1
+
+      if (phase !== 'idle') {
+        ctx.font = '600 13px "Source Code Pro", ui-monospace, Menlo, Consolas, monospace'
+        ctx.fillStyle = isDark ? 'rgba(240,240,245,0.75)' : 'rgba(26,26,46,0.65)'
+        ctx.textAlign = 'right'
+        ctx.fillText(`分数 ${score}`, width - 12, 20)
+        ctx.textAlign = 'left'
+      }
+
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', resize)
+      window.removeEventListener('keydown', onKey)
+      canvas.removeEventListener('touchstart', onTouchStart)
+      canvas.removeEventListener('touchend', onTouchEnd)
+      canvas.removeEventListener('pointerdown', onPointer)
+    }
+  }, [])
+
+  return (
+    <div className="hero-game-wrap" id="playground">
+      <div className="hero-game-caption">
+        <span>🐍 方向键 / WASD 控制，手机端可滑动切换方向</span>
+        <span>最高分 {highScore}</span>
+      </div>
+      <div className="hero-game-canvas-wrap">
+        <canvas ref={canvasRef} className="hero-game-canvas" />
+        {status !== 'playing' && (
+          <div className="hero-game-overlay">
+            {status === 'idle' ? (
+              <button className="btn btn-primary" onClick={() => startRef.current()}>开始游戏</button>
+            ) : (
+              <>
+                <span className="hero-game-overlay-text">游戏结束 · 得分 {finalScore}</span>
+                <button className="btn btn-primary" onClick={() => startRef.current()}>再玩一次</button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
