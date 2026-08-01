@@ -165,23 +165,13 @@ body {
   max-width: 1120px;
 }
 
-/* Dot-grid + ripple canvas. Desktop keeps it behind everything (plenty of
-   open background to show it off). Mobile sections are dense with opaque
-   cards, so the canvas sits above the content there instead, blended in via
-   mix-blend-mode — it only visibly tints where a ripple dot is actually lit,
-   letting the water effect read even over cards during a scroll/tap. */
+/* Dot-grid + ripple canvas — stays behind all content. Raising it above
+   cards with mix-blend-mode was tried to make ripples visible through
+   opaque cards on mobile, but mix-blend-mode forces the browser to
+   recomposite the whole page stack every animation frame, which stalled
+   the animation on real phones. Not worth the tradeoff — reverted. */
 .vb-canvas {
   z-index: -1;
-}
-
-@media (max-width: 768px), (pointer: coarse) {
-  .vb-canvas {
-    z-index: 3;
-    mix-blend-mode: multiply;
-  }
-  [data-theme="dark"] .vb-canvas {
-    mix-blend-mode: screen;
-  }
 }
 
 /* ── Sections ── */

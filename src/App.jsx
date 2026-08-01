@@ -1248,8 +1248,8 @@ function Footer() {
 export default function App() {
   return (
     <ThemeProvider>
+      <VBCodeBackground />
       <div style={{ position: 'relative', zIndex: 1 }}>
-        <VBCodeBackground />
         <Navbar />
         <main>
           <Hero />
