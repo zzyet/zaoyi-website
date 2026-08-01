@@ -21,7 +21,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Source+Sans+3:wght@300;400;600;700&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet" />
     <style>
-      /* Side Go code streams — colors match site accent / teal */
+      /* Side Go code streams — colors match site accent / teal.
+         Fixed and vertically centered so they stay put on screen for the
+         whole page, regardless of scroll position. */
       .code-stream {
         position: fixed;
         z-index: 0;
@@ -38,8 +40,6 @@
         color: rgba(124, 92, 255, 0.62);
         mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
         -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
-        opacity: 1;
-        transition: opacity 0.35s ease;
       }
       .code-stream.left {
         left: clamp(12px, 2vw, 36px);
@@ -139,17 +139,6 @@
         var right = document.getElementById('code-right');
         if (left) left.textContent = text;
         if (right) right.textContent = text;
-
-        var streams = document.querySelectorAll('.code-stream');
-        function syncOpacity() {
-          var fade = Math.max(0, 1 - window.scrollY / 420);
-          streams.forEach(function (el) {
-            var base = el.classList.contains('left') ? 0.9 : 0.78;
-            el.style.opacity = String(fade * base);
-          });
-        }
-        window.addEventListener('scroll', syncOpacity, { passive: true });
-        syncOpacity();
       })();
     </script>
   </body>

@@ -81,26 +81,25 @@ function VBCodeBackground() {
     // Mobile: denser grid; springier, sharper rings for a livelier water feel
     const GAP = isCoarse ? 15 : 24
     const DOT_RADIUS = isCoarse ? 1.6 : 1.55
-    const WAVE_SPEED = isCoarse ? 270 : 340
-    const WAVE_AMPLITUDE = isCoarse ? 30 : 14
-    const WAVE_LENGTH = isCoarse ? 120 : 160
-    const WAVE_ENVELOPE = WAVE_LENGTH * (isCoarse ? 1.45 : 1.8)
-    const WAVE_LIFETIME = isCoarse ? 2200 : 3200
+    const WAVE_SPEED = isCoarse ? 270 : 360
+    const WAVE_AMPLITUDE = isCoarse ? 30 : 21
+    const WAVE_LENGTH = isCoarse ? 120 : 150
+    const WAVE_ENVELOPE = WAVE_LENGTH * (isCoarse ? 1.45 : 1.75)
+    const WAVE_LIFETIME = isCoarse ? 2200 : 2700
     const SPAWN_GAP = 28
     const SPAWN_INTERVAL = 28
     const HOVER_RADIUS = 170
-    const HOVER_STRENGTH = 2.2
-    const SPRING = isCoarse ? 0.24 : 0.14
-    const DAMPING = isCoarse ? 0.7 : 0.78
+    const HOVER_STRENGTH = 2.5
+    const SPRING = isCoarse ? 0.24 : 0.2
+    const DAMPING = isCoarse ? 0.7 : 0.74
     const MAX_RIPPLES = isCoarse ? 10 : 18
     const TAP_STRENGTH = 2.05
-    const TAP_MOVE_THRESHOLD = 12
     const TAP_CLICK_DEBOUNCE = 420
     // Per-dot visibility: charge when the ring hits, then each dot fades on its own
     const LIT_IN = 0.7
     const LIT_OUT = 0.13
-    const GLOW_FOLLOW = isCoarse ? 0.34 : 0.18
-    const TANGENT_MIX = isCoarse ? 0.28 : 0 // slight swirl so motion feels less radial-only
+    const GLOW_FOLLOW = isCoarse ? 0.34 : 0.26
+    const TANGENT_MIX = isCoarse ? 0.28 : 0.14 // slight swirl so motion feels less radial-only
     const TWO_PI = Math.PI * 2
     const INV_WAVE_LENGTH = 1 / WAVE_LENGTH
     const ENVELOPE_SIGMA2 = 2 * (WAVE_ENVELOPE / 2.6) ** 2
@@ -110,7 +109,6 @@ function VBCodeBackground() {
     let drawing = false
     let lastTapSpawn = 0
     let colorCache = { theme: '', baseAlpha: 0.07, peakAlpha: 0.24, rgb: '124,110,190' }
-    const tapGesture = { x: 0, y: 0, id: null, active: false, moved: false }
 
     const getColors = () => {
       const theme = document.documentElement.getAttribute('data-theme') || 'light'
@@ -279,7 +277,7 @@ function VBCodeBackground() {
         const reveal = isCoarse ? dot.lit : 1
         const alpha = (baseAlpha + (peakAlpha - baseAlpha) * Math.min(1, glow * 1.35)) * reveal
         if (alpha < 0.01) continue
-        const radius = DOT_RADIUS + glow * (isCoarse ? 2.5 : 1.25)
+        const radius = DOT_RADIUS + glow * (isCoarse ? 2.5 : 1.6)
 
         ctx.beginPath()
         ctx.arc(dot.x + dot.dx, dot.y + dot.dy, radius, 0, TWO_PI)
@@ -341,53 +339,15 @@ function VBCodeBackground() {
       }
 
       const onTouchStart = (e) => {
-        if (e.touches.length !== 1) {
-          tapGesture.active = false
-          tapGesture.moved = true
-          return
-        }
+        // Multi-touch (e.g. pinch) — never splash
+        if (e.touches.length !== 1) return
         const t = e.touches[0]
-        tapGesture.x = t.clientX
-        tapGesture.y = t.clientY
-        tapGesture.id = t.identifier
-        tapGesture.active = true
-        tapGesture.moved = false
+        // Splash immediately on finger-down — don't wait to see if it turns
+        // into a scroll/swipe, so the ripple always shows on touch.
+        spawnTapRipple(t.clientX, t.clientY)
       }
 
-      const onTouchMove = (e) => {
-        if (!tapGesture.active) return
-        let t = null
-        for (let i = 0; i < e.touches.length; i++) {
-          if (e.touches[i].identifier === tapGesture.id) {
-            t = e.touches[i]
-            break
-          }
-        }
-        if (!t) t = e.touches[0]
-        if (!t) return
-        if (Math.hypot(t.clientX - tapGesture.x, t.clientY - tapGesture.y) > TAP_MOVE_THRESHOLD) {
-          tapGesture.moved = true
-        }
-      }
-
-      const onTouchEnd = (e) => {
-        if (!tapGesture.active) return
-        const moved = tapGesture.moved
-        const x = tapGesture.x
-        const y = tapGesture.y
-        tapGesture.active = false
-
-        // Multi-touch or scroll gesture — never splash
-        if (moved || e.touches.length > 0) return
-        spawnTapRipple(x, y)
-      }
-
-      const onTouchCancel = () => {
-        tapGesture.active = false
-        tapGesture.moved = true
-      }
-
-      // Click fallback (and debounce against touchend → click double fire)
+      // Click fallback (and debounce against touchstart → click double fire)
       const onClick = (e) => {
         const now = performance.now()
         if (now - lastTapSpawn < TAP_CLICK_DEBOUNCE) return
@@ -405,9 +365,6 @@ function VBCodeBackground() {
       window.addEventListener('orientationchange', onOrientation)
       window.addEventListener('resize', resize, { passive: true })
       window.addEventListener('touchstart', onTouchStart, { passive: true })
-      window.addEventListener('touchmove', onTouchMove, { passive: true })
-      window.addEventListener('touchend', onTouchEnd, { passive: true })
-      window.addEventListener('touchcancel', onTouchCancel, { passive: true })
       window.addEventListener('click', onClick, { passive: true })
       themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
@@ -416,9 +373,6 @@ function VBCodeBackground() {
         window.removeEventListener('orientationchange', onOrientation)
         window.removeEventListener('resize', resize)
         window.removeEventListener('touchstart', onTouchStart)
-        window.removeEventListener('touchmove', onTouchMove)
-        window.removeEventListener('touchend', onTouchEnd)
-        window.removeEventListener('touchcancel', onTouchCancel)
         window.removeEventListener('click', onClick)
         if (rafRef.current) cancelAnimationFrame(rafRef.current)
         drawing = false
@@ -464,11 +418,11 @@ function VBCodeBackground() {
         e.clientY - mouseRef.current.lastY,
       )
       if (moved >= SPAWN_GAP || now - mouseRef.current.lastSpawn > SPAWN_INTERVAL) {
-        spawnAlongPath(e.clientX, e.clientY, 0.62)
+        spawnAlongPath(e.clientX, e.clientY, 0.8)
       }
     }
     const onMouseDown = (e) => {
-      spawnRipple(e.clientX, e.clientY, 1.55)
+      spawnRipple(e.clientX, e.clientY, 1.85)
     }
 
     resize()
@@ -936,7 +890,8 @@ const pipelineSteps = [
 
 function Pipeline() {
   return (
-    <section id="pipeline" className="section section-alt">
+    <section id="pipeline" className="section">
+      <div className="section-glow" aria-hidden="true" />
       <div className="container">
         <ScrollReveal>
           <span className="badge">全流程覆盖</span>
@@ -1028,6 +983,7 @@ const advantages = [
 function AdvantageCards() {
   return (
     <section id="advantages" className="section">
+      <div className="section-glow" aria-hidden="true" />
       <div className="container">
         <ScrollReveal>
           <span className="badge">AI 优势</span>
@@ -1121,7 +1077,8 @@ const values = [
 
 function ValueProps() {
   return (
-    <section id="value" className="section section-alt">
+    <section id="value" className="section">
+      <div className="section-glow" aria-hidden="true" />
       <div className="container">
         <ScrollReveal>
           <span className="badge">端到端价值</span>
@@ -1186,6 +1143,7 @@ const compareRows = [
 function ComparisonTable() {
   return (
     <section id="compare" className="section">
+      <div className="section-glow" aria-hidden="true" />
       <div className="container">
         <ScrollReveal>
           <span className="badge">代际对比</span>

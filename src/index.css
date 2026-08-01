@@ -166,21 +166,45 @@ body {
 }
 
 /* ── Sections ── */
+/* Transparent so the fixed dot-grid + ripple canvas reads through the whole
+   page, not just the hero. Cards inside keep their own solid background. */
 .section {
   position: relative;
   padding: var(--section-gap) 0;
-  background: var(--bg-page);
+  overflow: hidden;
 }
 
-.section-alt {
-  background: var(--bg-alt);
+.section > .container {
+  position: relative;
+  z-index: 1;
 }
 
-[data-theme="dark"] .section {
-  background: var(--bg-page);
+/* Ambient glow beneath the section header — a bit of "substance" that
+   gradient-fades to transparent, echoing the hero's aurora blobs */
+.section-glow {
+  position: absolute;
+  left: 50%;
+  top: -40px;
+  transform: translateX(-50%);
+  width: min(64vw, 620px);
+  height: min(64vw, 420px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,92,255,0.14) 0%, rgba(34,211,238,0.07) 45%, transparent 72%);
+  filter: blur(56px);
+  pointer-events: none;
+  z-index: 0;
 }
-[data-theme="dark"] .section-alt {
-  background: var(--bg-alt);
+
+[data-theme="dark"] .section-glow {
+  background: radial-gradient(circle, rgba(139,92,246,0.2) 0%, rgba(34,211,238,0.09) 45%, transparent 72%);
+}
+
+@media (max-width: 768px) {
+  .section-glow {
+    width: min(88vw, 420px);
+    height: min(88vw, 320px);
+    top: -20px;
+  }
 }
 
 /* Hero is transparent so the dot grid + ripples show through */
@@ -1039,6 +1063,7 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
+  background: var(--bg-card);
 }
 
 .compare-table th, .compare-table td {
