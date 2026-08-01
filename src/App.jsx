@@ -81,25 +81,31 @@ function VBCodeBackground() {
     // Mobile: denser grid; springier, sharper rings for a livelier water feel
     const GAP = isCoarse ? 15 : 24
     const DOT_RADIUS = isCoarse ? 1.6 : 1.55
-    const WAVE_SPEED = isCoarse ? 270 : 360
+    const WAVE_SPEED = isCoarse ? 235 : 360
     const WAVE_AMPLITUDE = isCoarse ? 30 : 21
     const WAVE_LENGTH = isCoarse ? 120 : 150
     const WAVE_ENVELOPE = WAVE_LENGTH * (isCoarse ? 1.45 : 1.75)
-    const WAVE_LIFETIME = isCoarse ? 2200 : 2700
+    const WAVE_LIFETIME = isCoarse ? 2450 : 2700
     const SPAWN_GAP = 28
     const SPAWN_INTERVAL = 28
     const HOVER_RADIUS = 170
     const HOVER_STRENGTH = 2.5
-    const SPRING = isCoarse ? 0.24 : 0.2
-    const DAMPING = isCoarse ? 0.7 : 0.74
+    const SPRING = isCoarse ? 0.17 : 0.2
+    const DAMPING = isCoarse ? 0.78 : 0.74
     const MAX_RIPPLES = isCoarse ? 10 : 18
     const TAP_STRENGTH = 2.05
     const TAP_CLICK_DEBOUNCE = 420
-    // Per-dot visibility: charge when the ring hits, then each dot fades on its own
-    const LIT_IN = 0.7
+    // Per-dot visibility: charge when the ring hits, then each dot fades on its own.
+    // Mobile fades in gently (bloom) instead of snapping to full brightness.
+    const LIT_IN = isCoarse ? 0.4 : 0.7
     const LIT_OUT = 0.13
-    const GLOW_FOLLOW = isCoarse ? 0.34 : 0.26
+    const GLOW_FOLLOW = isCoarse ? 0.26 : 0.26
     const TANGENT_MIX = isCoarse ? 0.28 : 0.14 // slight swirl so motion feels less radial-only
+    // Wave crest harmonics — mobile uses a softer blend (less high-frequency
+    // texture) so the ring reads as one smooth pulse instead of a busy ripple.
+    const HARMONIC_1 = isCoarse ? 0.82 : 0.72
+    const HARMONIC_2 = isCoarse ? 0.15 : 0.22
+    const HARMONIC_3 = isCoarse ? 0.03 : 0.06
     const TWO_PI = Math.PI * 2
     const INV_WAVE_LENGTH = 1 / WAVE_LENGTH
     const ENVELOPE_SIGMA2 = 2 * (WAVE_ENVELOPE / 2.6) ** 2
@@ -224,9 +230,9 @@ function VBCodeBackground() {
           const ringFade = Math.exp(-(fromFront * fromFront) / ENVELOPE_SIGMA2)
 
           const phase = fromFront * INV_WAVE_LENGTH * TWO_PI
-          // Sharper multi-harmonic crest — reads more like a lively water ring
+          // Multi-harmonic crest — reads more like a lively water ring
           const wave =
-            (Math.sin(phase) * 0.72 + Math.sin(phase * 2.1 + 0.35) * 0.22 + Math.sin(phase * 3.2) * 0.06) *
+            (Math.sin(phase) * HARMONIC_1 + Math.sin(phase * 2.1 + 0.35) * HARMONIC_2 + Math.sin(phase * 3.2) * HARMONIC_3) *
             WAVE_AMPLITUDE * lifeFade * distFade * ringFade * ripple.strength
 
           const invDist = 1 / dist
