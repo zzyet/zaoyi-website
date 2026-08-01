@@ -165,6 +165,25 @@ body {
   max-width: 1120px;
 }
 
+/* Dot-grid + ripple canvas. Desktop keeps it behind everything (plenty of
+   open background to show it off). Mobile sections are dense with opaque
+   cards, so the canvas sits above the content there instead, blended in via
+   mix-blend-mode — it only visibly tints where a ripple dot is actually lit,
+   letting the water effect read even over cards during a scroll/tap. */
+.vb-canvas {
+  z-index: -1;
+}
+
+@media (max-width: 768px), (pointer: coarse) {
+  .vb-canvas {
+    z-index: 3;
+    mix-blend-mode: multiply;
+  }
+  [data-theme="dark"] .vb-canvas {
+    mix-blend-mode: screen;
+  }
+}
+
 /* ── Sections ── */
 /* Transparent so the fixed dot-grid + ripple canvas reads through the whole
    page, not just the hero. Cards inside keep their own solid background. */

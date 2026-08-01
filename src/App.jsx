@@ -314,7 +314,6 @@ function VBCodeBackground() {
         const heightChanged = Math.abs(nextH - height) > 120
         if (!widthChanged && !heightChanged) return
       }
-
       dpr = Math.min(window.devicePixelRatio || 1, isCoarse ? 1.5 : 2)
       width = nextW
       height = nextH
@@ -443,13 +442,13 @@ function VBCodeBackground() {
   return (
     <canvas
       ref={canvasRef}
+      className="vb-canvas"
       aria-hidden="true"
       style={{
         position: 'fixed',
         inset: 0,
         width: '100%',
         height: '100%',
-        zIndex: -1,
         pointerEvents: 'none',
       }}
     />
@@ -1249,8 +1248,8 @@ function Footer() {
 export default function App() {
   return (
     <ThemeProvider>
-      <VBCodeBackground />
       <div style={{ position: 'relative', zIndex: 1 }}>
+        <VBCodeBackground />
         <Navbar />
         <main>
           <Hero />
