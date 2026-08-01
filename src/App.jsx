@@ -9,20 +9,41 @@ function useTheme() {
 }
 
 function ThemeProvider({ children }) {
+  const systemTheme = () =>
+    window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('zaoyi-theme')
-    if (saved) return saved
-    if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark'
-    return 'light'
+    if (localStorage.getItem('zaoyi-theme-manual') === '1') {
+      const saved = localStorage.getItem('zaoyi-theme')
+      if (saved === 'light' || saved === 'dark') return saved
+    }
+    return systemTheme()
   })
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('zaoyi-theme', theme)
+    if (localStorage.getItem('zaoyi-theme-manual') === '1') {
+      localStorage.setItem('zaoyi-theme', theme)
+    }
   }, [theme])
 
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (e) => {
+      if (localStorage.getItem('zaoyi-theme-manual') === '1') return
+      setTheme(e.matches ? 'dark' : 'light')
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
   const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light')
+    localStorage.setItem('zaoyi-theme-manual', '1')
+    setTheme(prev => {
+      const next = prev === 'light' ? 'dark' : 'light'
+      localStorage.setItem('zaoyi-theme', next)
+      return next
+    })
   }
 
   return (
@@ -33,8 +54,9 @@ function ThemeProvider({ children }) {
 }
 
 // ─── Dot Grid + Water Ripple Background ─────────────────────────────────────
-// Static dot grid; mouse movement spawns ripple wave sources that propagate
-// outward like water surface waves. Dots spring toward targets for silky motion.
+// Desktop: mouse path + click ripples, continuous RAF.
+// Mobile: grid hidden by default; tap reveals denser dots + a strong water-drop
+// ripple, then fades the grid away and stops RAF.
 function VBCodeBackground() {
   const canvasRef = useRef(null)
   const ripplesRef = useRef([])
@@ -51,33 +73,44 @@ function VBCodeBackground() {
       return
     }
 
-    // Mobile / touch: static dots only — continuous RAF + touch ripples fight scroll
     const isCoarse =
       window.matchMedia('(max-width: 768px)').matches ||
       window.matchMedia('(pointer: coarse)').matches
 
     const ctx = canvas.getContext('2d', { alpha: true })
-    const GAP = isCoarse ? 36 : 24
-    const DOT_RADIUS = isCoarse ? 1.35 : 1.55
-    const WAVE_SPEED = 340
-    const WAVE_AMPLITUDE = 14
-    const WAVE_LENGTH = 160
-    const WAVE_ENVELOPE = WAVE_LENGTH * 1.8
-    const WAVE_LIFETIME = 3200
+    // Mobile: denser grid; springier, sharper rings for a livelier water feel
+    const GAP = isCoarse ? 15 : 24
+    const DOT_RADIUS = isCoarse ? 1.6 : 1.55
+    const WAVE_SPEED = isCoarse ? 270 : 340
+    const WAVE_AMPLITUDE = isCoarse ? 30 : 14
+    const WAVE_LENGTH = isCoarse ? 120 : 160
+    const WAVE_ENVELOPE = WAVE_LENGTH * (isCoarse ? 1.45 : 1.8)
+    const WAVE_LIFETIME = isCoarse ? 2200 : 3200
     const SPAWN_GAP = 28
     const SPAWN_INTERVAL = 28
     const HOVER_RADIUS = 170
     const HOVER_STRENGTH = 2.2
-    const SPRING = 0.14
-    const DAMPING = 0.78
-    const MAX_RIPPLES = 18
+    const SPRING = isCoarse ? 0.24 : 0.14
+    const DAMPING = isCoarse ? 0.7 : 0.78
+    const MAX_RIPPLES = isCoarse ? 10 : 18
+    const TAP_STRENGTH = 2.05
+    const TAP_MOVE_THRESHOLD = 12
+    const TAP_CLICK_DEBOUNCE = 420
+    // Per-dot visibility: charge when the ring hits, then each dot fades on its own
+    const LIT_IN = 0.7
+    const LIT_OUT = 0.13
+    const GLOW_FOLLOW = isCoarse ? 0.34 : 0.18
+    const TANGENT_MIX = isCoarse ? 0.28 : 0 // slight swirl so motion feels less radial-only
     const TWO_PI = Math.PI * 2
     const INV_WAVE_LENGTH = 1 / WAVE_LENGTH
     const ENVELOPE_SIGMA2 = 2 * (WAVE_ENVELOPE / 2.6) ** 2
 
     let width = 0, height = 0, dpr = 1
     let lastFrame = performance.now()
+    let drawing = false
+    let lastTapSpawn = 0
     let colorCache = { theme: '', baseAlpha: 0.07, peakAlpha: 0.24, rgb: '124,110,190' }
+    const tapGesture = { x: 0, y: 0, id: null, active: false, moved: false }
 
     const getColors = () => {
       const theme = document.documentElement.getAttribute('data-theme') || 'light'
@@ -85,8 +118,8 @@ function VBCodeBackground() {
       const isDark = theme === 'dark'
       colorCache = {
         theme,
-        baseAlpha: isDark ? 0.1 : 0.07,
-        peakAlpha: isDark ? 0.28 : 0.24,
+        baseAlpha: isCoarse ? (isDark ? 0.2 : 0.14) : (isDark ? 0.1 : 0.07),
+        peakAlpha: isCoarse ? (isDark ? 0.55 : 0.46) : (isDark ? 0.28 : 0.24),
         rgb: isDark ? '168,155,220' : '124,110,190',
       }
       return colorCache
@@ -108,23 +141,168 @@ function VBCodeBackground() {
             vx: 0,
             vy: 0,
             glow: 0,
+            lit: 0,
           })
         }
       }
       dotsRef.current = dots
     }
 
-    const paintStatic = () => {
-      const { baseAlpha, rgb } = getColors()
+    const clearCanvas = () => {
       ctx.clearRect(0, 0, width, height)
+    }
+
+    const resetDotsRest = () => {
       const dots = dotsRef.current
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i]
+        dot.dx = 0
+        dot.dy = 0
+        dot.vx = 0
+        dot.vy = 0
+        dot.glow = 0
+        dot.lit = 0
+      }
+    }
+
+    const spawnRipple = (x, y, strength = 1, bornOffset = 0) => {
+      ripplesRef.current.push({ x, y, born: performance.now() + bornOffset, strength })
+      while (ripplesRef.current.length > MAX_RIPPLES) {
+        ripplesRef.current.shift()
+      }
+    }
+
+    // Primary drop + a softer trailing ring (mobile water echo)
+    const spawnTapRipplePair = (x, y) => {
+      spawnRipple(x, y, TAP_STRENGTH, 0)
+      if (isCoarse) spawnRipple(x, y, TAP_STRENGTH * 0.42, 110)
+    }
+
+    const easeOutCubic = (t) => 1 - (1 - t) ** 3
+
+    const draw = (now) => {
+      const dt = Math.min(32, now - lastFrame) / 16.67
+      lastFrame = now
+      ctx.clearRect(0, 0, width, height)
+
+      const ripples = ripplesRef.current
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        if (now - ripples[i].born > WAVE_LIFETIME) ripples.splice(i, 1)
+      }
+
+      const { baseAlpha, peakAlpha, rgb } = getColors()
+      const dots = dotsRef.current
+      const mx = mouseRef.current.x
+      const my = mouseRef.current.y
+      const spring = 1 - Math.pow(1 - SPRING, dt)
+      const damp = Math.pow(DAMPING, dt)
+      let anyLit = false
+
+      for (let i = 0; i < dots.length; i++) {
+        const dot = dots[i]
+        let tx = 0, ty = 0, intensity = 0
+
+        for (let r = 0; r < ripples.length; r++) {
+          const ripple = ripples[r]
+          const ageMs = now - ripple.born
+          if (ageMs < 0) continue
+          const age = ageMs * 0.001
+
+          const rx = dot.x - ripple.x
+          const ry = dot.y - ripple.y
+          const distSq = rx * rx + ry * ry
+          const waveFront = age * WAVE_SPEED
+          const maxReach = waveFront + WAVE_ENVELOPE
+          if (distSq > maxReach * maxReach) continue
+          const minReach = waveFront - WAVE_ENVELOPE
+          if (minReach > 0 && distSq < minReach * minReach) continue
+
+          const dist = Math.sqrt(distSq) || 0.0001
+          const fromFront = dist - waveFront
+
+          const lifeT = ageMs / WAVE_LIFETIME
+          const lifeFade = 1 - easeOutCubic(lifeT)
+          const distFade = Math.exp(-dist / (isCoarse ? 560 : 720))
+          const ringFade = Math.exp(-(fromFront * fromFront) / ENVELOPE_SIGMA2)
+
+          const phase = fromFront * INV_WAVE_LENGTH * TWO_PI
+          // Sharper multi-harmonic crest — reads more like a lively water ring
+          const wave =
+            (Math.sin(phase) * 0.72 + Math.sin(phase * 2.1 + 0.35) * 0.22 + Math.sin(phase * 3.2) * 0.06) *
+            WAVE_AMPLITUDE * lifeFade * distFade * ringFade * ripple.strength
+
+          const invDist = 1 / dist
+          const nx = rx * invDist
+          const ny = ry * invDist
+          tx += nx * wave - ny * wave * TANGENT_MIX
+          ty += ny * wave + nx * wave * TANGENT_MIX
+          intensity = Math.max(intensity, Math.abs(ringFade * lifeFade * distFade))
+        }
+
+        let hoverGlow = 0
+        if (!isCoarse) {
+          const mdx = dot.x - mx
+          const mdy = dot.y - my
+          const mDistSq = mdx * mdx + mdy * mdy
+          if (mDistSq < HOVER_RADIUS * HOVER_RADIUS) {
+            const mDist = Math.sqrt(mDistSq) || 1
+            const proximity = 1 - mDist / HOVER_RADIUS
+            const ease = proximity * proximity * (3 - 2 * proximity)
+            hoverGlow = ease * HOVER_STRENGTH
+            const pullStrength = ease * 3.2
+            tx -= (mdx / mDist) * pullStrength
+            ty -= (mdy / mDist) * pullStrength
+            intensity = Math.max(intensity, ease)
+          }
+        }
+
+        const ax = (tx - dot.dx) * spring
+        const ay = (ty - dot.dy) * spring
+        dot.vx = (dot.vx + ax) * damp
+        dot.vy = (dot.vy + ay) * damp
+        dot.dx += dot.vx
+        dot.dy += dot.vy
+        dot.glow += (intensity - dot.glow) * Math.min(1, GLOW_FOLLOW * dt)
+
+        // Mobile: each dot lights when the ring passes, then fades on its own schedule
+        if (isCoarse) {
+          if (intensity > 0.02) {
+            const targetLit = Math.min(1, 0.4 + intensity * 1.7)
+            dot.lit += (targetLit - dot.lit) * Math.min(1, LIT_IN * dt)
+          } else {
+            dot.lit += (0 - dot.lit) * Math.min(1, LIT_OUT * dt)
+          }
+          if (dot.lit > 0.02) anyLit = true
+        }
+
+        const glow = Math.max(0, Math.min(1.6, dot.glow + hoverGlow * 0.28))
+        const reveal = isCoarse ? dot.lit : 1
+        const alpha = (baseAlpha + (peakAlpha - baseAlpha) * Math.min(1, glow * 1.35)) * reveal
+        if (alpha < 0.01) continue
+        const radius = DOT_RADIUS + glow * (isCoarse ? 2.5 : 1.25)
+
         ctx.beginPath()
-        ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, TWO_PI)
-        ctx.fillStyle = `rgba(${rgb},${baseAlpha})`
+        ctx.arc(dot.x + dot.dx, dot.y + dot.dy, radius, 0, TWO_PI)
+        ctx.fillStyle = `rgba(${rgb},${alpha})`
         ctx.fill()
       }
+
+      if (isCoarse && ripples.length === 0 && !anyLit) {
+        drawing = false
+        rafRef.current = null
+        resetDotsRest()
+        clearCanvas()
+        return
+      }
+
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    const startDrawLoop = () => {
+      if (drawing) return
+      drawing = true
+      lastFrame = performance.now()
+      rafRef.current = requestAnimationFrame(draw)
     }
 
     const resize = () => {
@@ -148,28 +326,107 @@ function VBCodeBackground() {
       canvas.style.height = '100%'
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       buildDots()
-      if (isCoarse) paintStatic()
+      ripplesRef.current = []
+      if (isCoarse && !drawing) clearCanvas()
     }
 
+    // ── Mobile: tap-only water drops (no follow, on-demand RAF) ────────────
     if (isCoarse) {
+      const spawnTapRipple = (x, y) => {
+        const now = performance.now()
+        if (now - lastTapSpawn < 80) return
+        lastTapSpawn = now
+        spawnTapRipplePair(x, y)
+        startDrawLoop()
+      }
+
+      const onTouchStart = (e) => {
+        if (e.touches.length !== 1) {
+          tapGesture.active = false
+          tapGesture.moved = true
+          return
+        }
+        const t = e.touches[0]
+        tapGesture.x = t.clientX
+        tapGesture.y = t.clientY
+        tapGesture.id = t.identifier
+        tapGesture.active = true
+        tapGesture.moved = false
+      }
+
+      const onTouchMove = (e) => {
+        if (!tapGesture.active) return
+        let t = null
+        for (let i = 0; i < e.touches.length; i++) {
+          if (e.touches[i].identifier === tapGesture.id) {
+            t = e.touches[i]
+            break
+          }
+        }
+        if (!t) t = e.touches[0]
+        if (!t) return
+        if (Math.hypot(t.clientX - tapGesture.x, t.clientY - tapGesture.y) > TAP_MOVE_THRESHOLD) {
+          tapGesture.moved = true
+        }
+      }
+
+      const onTouchEnd = (e) => {
+        if (!tapGesture.active) return
+        const moved = tapGesture.moved
+        const x = tapGesture.x
+        const y = tapGesture.y
+        tapGesture.active = false
+
+        // Multi-touch or scroll gesture — never splash
+        if (moved || e.touches.length > 0) return
+        spawnTapRipple(x, y)
+      }
+
+      const onTouchCancel = () => {
+        tapGesture.active = false
+        tapGesture.moved = true
+      }
+
+      // Click fallback (and debounce against touchend → click double fire)
+      const onClick = (e) => {
+        const now = performance.now()
+        if (now - lastTapSpawn < TAP_CLICK_DEBOUNCE) return
+        spawnTapRipple(e.clientX, e.clientY)
+      }
+
+      const onOrientation = () => { setTimeout(resize, 250) }
+      const onTheme = () => {
+        colorCache.theme = ''
+        if (!drawing) clearCanvas()
+      }
+      const themeObs = new MutationObserver(onTheme)
+
       resize()
-      window.addEventListener('orientationchange', () => {
-        setTimeout(resize, 250)
-      })
-      const themeObs = new MutationObserver(paintStatic)
+      window.addEventListener('orientationchange', onOrientation)
+      window.addEventListener('resize', resize, { passive: true })
+      window.addEventListener('touchstart', onTouchStart, { passive: true })
+      window.addEventListener('touchmove', onTouchMove, { passive: true })
+      window.addEventListener('touchend', onTouchEnd, { passive: true })
+      window.addEventListener('touchcancel', onTouchCancel, { passive: true })
+      window.addEventListener('click', onClick, { passive: true })
       themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
       return () => {
         themeObs.disconnect()
+        window.removeEventListener('orientationchange', onOrientation)
+        window.removeEventListener('resize', resize)
+        window.removeEventListener('touchstart', onTouchStart)
+        window.removeEventListener('touchmove', onTouchMove)
+        window.removeEventListener('touchend', onTouchEnd)
+        window.removeEventListener('touchcancel', onTouchCancel)
+        window.removeEventListener('click', onClick)
+        if (rafRef.current) cancelAnimationFrame(rafRef.current)
+        drawing = false
+        ripplesRef.current = []
       }
     }
 
-    const spawnRipple = (x, y, strength = 1) => {
-      ripplesRef.current.push({ x, y, born: performance.now(), strength })
-      if (ripplesRef.current.length > MAX_RIPPLES) {
-        ripplesRef.current.shift()
-      }
-    }
-
+    // ── Desktop: path ripples + continuous RAF ────────────────────────────
     const spawnAlongPath = (x, y, strength) => {
       const mouse = mouseRef.current
       const lx = mouse.lastX
@@ -198,98 +455,6 @@ function VBCodeBackground() {
       mouse.lastSpawn = performance.now()
     }
 
-    const easeOutCubic = (t) => 1 - (1 - t) ** 3
-
-    const draw = (now) => {
-      const dt = Math.min(32, now - lastFrame) / 16.67
-      lastFrame = now
-      ctx.clearRect(0, 0, width, height)
-
-      const ripples = ripplesRef.current
-      for (let i = ripples.length - 1; i >= 0; i--) {
-        if (now - ripples[i].born > WAVE_LIFETIME) ripples.splice(i, 1)
-      }
-
-      const { baseAlpha, peakAlpha, rgb } = getColors()
-      const dots = dotsRef.current
-      const mx = mouseRef.current.x
-      const my = mouseRef.current.y
-      const spring = 1 - Math.pow(1 - SPRING, dt)
-      const damp = Math.pow(DAMPING, dt)
-
-      for (let i = 0; i < dots.length; i++) {
-        const dot = dots[i]
-        let tx = 0, ty = 0, intensity = 0
-
-        for (let r = 0; r < ripples.length; r++) {
-          const ripple = ripples[r]
-          const ageMs = now - ripple.born
-          const age = ageMs * 0.001
-
-          const rx = dot.x - ripple.x
-          const ry = dot.y - ripple.y
-          const distSq = rx * rx + ry * ry
-          const waveFront = age * WAVE_SPEED
-          const maxReach = waveFront + WAVE_ENVELOPE
-          if (distSq > maxReach * maxReach) continue
-          const minReach = waveFront - WAVE_ENVELOPE
-          if (minReach > 0 && distSq < minReach * minReach) continue
-
-          const dist = Math.sqrt(distSq) || 0.0001
-          const fromFront = dist - waveFront
-
-          const lifeT = ageMs / WAVE_LIFETIME
-          const lifeFade = 1 - easeOutCubic(lifeT)
-          const distFade = Math.exp(-dist / 720)
-          const ringFade = Math.exp(-(fromFront * fromFront) / ENVELOPE_SIGMA2)
-
-          const phase = fromFront * INV_WAVE_LENGTH * TWO_PI
-          const wave =
-            (Math.sin(phase) * 0.82 + Math.sin(phase * 1.65 + 0.4) * 0.18) *
-            WAVE_AMPLITUDE * lifeFade * distFade * ringFade * ripple.strength
-
-          const invDist = 1 / dist
-          tx += rx * invDist * wave
-          ty += ry * invDist * wave
-          intensity = Math.max(intensity, Math.abs(ringFade * lifeFade * distFade))
-        }
-
-        const mdx = dot.x - mx
-        const mdy = dot.y - my
-        const mDistSq = mdx * mdx + mdy * mdy
-        let hoverGlow = 0
-        if (mDistSq < HOVER_RADIUS * HOVER_RADIUS) {
-          const mDist = Math.sqrt(mDistSq) || 1
-          const proximity = 1 - mDist / HOVER_RADIUS
-          const ease = proximity * proximity * (3 - 2 * proximity)
-          hoverGlow = ease * HOVER_STRENGTH
-          const pullStrength = ease * 3.2
-          tx -= (mdx / mDist) * pullStrength
-          ty -= (mdy / mDist) * pullStrength
-          intensity = Math.max(intensity, ease)
-        }
-
-        const ax = (tx - dot.dx) * spring
-        const ay = (ty - dot.dy) * spring
-        dot.vx = (dot.vx + ax) * damp
-        dot.vy = (dot.vy + ay) * damp
-        dot.dx += dot.vx
-        dot.dy += dot.vy
-        dot.glow += (intensity - dot.glow) * Math.min(1, 0.18 * dt)
-
-        const glow = Math.max(0, Math.min(1.4, dot.glow + hoverGlow * 0.28))
-        const alpha = baseAlpha + (peakAlpha - baseAlpha) * Math.min(1, glow * 1.25)
-        const radius = DOT_RADIUS + glow * 1.25
-
-        ctx.beginPath()
-        ctx.arc(dot.x + dot.dx, dot.y + dot.dy, radius, 0, TWO_PI)
-        ctx.fillStyle = `rgba(${rgb},${alpha})`
-        ctx.fill()
-      }
-
-      rafRef.current = requestAnimationFrame(draw)
-    }
-
     const onMouseMove = (e) => {
       mouseRef.current.x = e.clientX
       mouseRef.current.y = e.clientY
@@ -310,13 +475,14 @@ function VBCodeBackground() {
     window.addEventListener('resize', resize, { passive: true })
     window.addEventListener('mousemove', onMouseMove, { passive: true })
     window.addEventListener('mousedown', onMouseDown)
-    rafRef.current = requestAnimationFrame(draw)
+    startDrawLoop()
 
     return () => {
       window.removeEventListener('resize', resize)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mousedown', onMouseDown)
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      drawing = false
     }
   }, [])
 
@@ -417,10 +583,6 @@ function AICodingWindow() {
   ]
 
   useEffect(() => {
-    if (
-      window.matchMedia('(max-width: 768px)').matches ||
-      window.matchMedia('(pointer: coarse)').matches
-    ) return
     const el = logContainerRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [visibleLines])
@@ -430,21 +592,11 @@ function AICodingWindow() {
       window.matchMedia('(max-width: 768px)').matches ||
       window.matchMedia('(pointer: coarse)').matches
 
-    // Mobile: show a static snapshot — timers + scrollTop fight finger scrolling
-    if (isCoarse) {
-      setVisibleLines(allLogs.slice(0, 8).map((log, i) => ({
-        ...log,
-        id: i,
-        prefix: log.type === 'success' ? '✓' : log.type === 'system' ? '◆' : '›',
-      })))
-      setActiveStep(2)
-      setDone(false)
-      return
-    }
-
     let cancelled = false
     let index = 0
     const runId = ++runIdRef.current
+    // Mobile: slower cadence — progress still moves, fewer React updates while scrolling
+    const mobileScale = isCoarse ? 1.35 : 1
 
     const resetAndLoop = () => {
       if (cancelled || runId !== runIdRef.current) return
@@ -478,7 +630,7 @@ function AICodingWindow() {
         },
       ])
       index += 1
-      const delay = stepTimings[log.step] ?? 700
+      const delay = Math.round((stepTimings[log.step] ?? 700) * mobileScale)
       timerRef.current = setTimeout(addNextLine, delay)
     }
 
@@ -499,27 +651,8 @@ function AICodingWindow() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      <div className="ai-pipeline-card">
-        <div className="ai-pipeline-header">
-          <div className="ai-pipeline-header-left">
-            <span className="ai-pipeline-dots" aria-hidden="true"><i /><i /><i /></span>
-            <div className="ai-pipeline-heading">
-              <span className="ai-pipeline-title">AI E2E Pipeline</span>
-              <span className="ai-pipeline-sub">zzyet.com · end-to-end delivery</span>
-            </div>
-          </div>
-          <div className="ai-pipeline-header-right">
-            <span className={`ai-pipeline-live${done ? ' done' : ''}`}>
-              <i />{done ? 'SHIPPED' : 'RUNNING'}
-            </span>
-            <span className="ai-pipeline-pct">{clampedProgress}%</span>
-          </div>
-        </div>
-
-        <div className="ai-pipeline-bar" aria-hidden="true">
-          <div className="ai-pipeline-bar-fill" style={{ width: `${clampedProgress}%` }} />
-        </div>
-
+      {/* Mobile first screen: hero copy + empty stage + pipeline chrome through timeline */}
+      <div className="ai-pipeline-fold">
         <div className="ai-pipeline-hero">
           <h1 className="ai-pipeline-hero-title">
             Ideas
@@ -570,20 +703,47 @@ function AICodingWindow() {
           <p className="ai-pipeline-hero-stats-note">基于内部交付项目的综合估算</p>
         </div>
 
-        <ol className="ai-pipeline-timeline" aria-label="交付阶段">
-          {steps.map((step, i) => (
-            <li
-              key={step.label}
-              className={`ai-pipeline-node${i < activeStep || done ? ' done' : ''}${i === activeStep && !done ? ' active' : ''}`}
-              style={{ '--step-color': step.color }}
-            >
-              <span className="ai-pipeline-node-index">{String(i + 1).padStart(2, '0')}</span>
-              <span className="ai-pipeline-node-label">{step.label}</span>
-              {i < steps.length - 1 && <span className="ai-pipeline-node-link" />}
-            </li>
-          ))}
-        </ol>
+        <div className="ai-pipeline-stage-slot" aria-hidden="true" />
 
+        <div className="ai-pipeline-card">
+          <div className="ai-pipeline-header">
+            <div className="ai-pipeline-header-left">
+              <span className="ai-pipeline-dots" aria-hidden="true"><i /><i /><i /></span>
+              <div className="ai-pipeline-heading">
+                <span className="ai-pipeline-title">AI E2E Pipeline</span>
+                <span className="ai-pipeline-sub">zzyet.com · end-to-end delivery</span>
+              </div>
+            </div>
+            <div className="ai-pipeline-header-right">
+              <span className={`ai-pipeline-live${done ? ' done' : ''}`}>
+                <i />{done ? 'SHIPPED' : 'RUNNING'}
+              </span>
+              <span className="ai-pipeline-pct">{clampedProgress}%</span>
+            </div>
+          </div>
+
+          <div className="ai-pipeline-bar" aria-hidden="true">
+            <div className="ai-pipeline-bar-fill" style={{ width: `${clampedProgress}%` }} />
+          </div>
+
+          <ol className="ai-pipeline-timeline" aria-label="交付阶段">
+            {steps.map((step, i) => (
+              <li
+                key={step.label}
+                className={`ai-pipeline-node${i < activeStep || done ? ' done' : ''}${i === activeStep && !done ? ' active' : ''}`}
+                style={{ '--step-color': step.color }}
+              >
+                <span className="ai-pipeline-node-index">{String(i + 1).padStart(2, '0')}</span>
+                <span className="ai-pipeline-node-label">{step.label}</span>
+                {i < steps.length - 1 && <span className="ai-pipeline-node-link" />}
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+
+      {/* Below the fold on mobile — log + footer */}
+      <div className="ai-pipeline-continued">
         <div className="ai-pipeline-log vb-log-scroll" id="pipeline-log" ref={logContainerRef}>
           {visibleLines.map((log, i) => (
             <motion.div
@@ -745,6 +905,11 @@ function Hero() {
     <section className="hero hero-minimal">
       <div className="hero-scrim" />
       <motion.div className="hero-glow" style={{ x: orb1X, y: orb1Y }} />
+      <div className="hero-aurora" aria-hidden="true">
+        <span className="hero-aurora-blob b1" />
+        <span className="hero-aurora-blob b2" />
+        <span className="hero-aurora-blob b3" />
+      </div>
 
       <div className="hero-stage">
         <div className="container hero-layout hero-layout-stack">
@@ -797,12 +962,18 @@ function Pipeline() {
                   borderTop: `3px solid ${item.color}`,
                 }}
               >
-                {/* Step indicator + icon */}
                 <div className="pipeline-step-header">
-                  <div className="pipeline-step-badge" style={{ background: item.color }}>
+                  <div
+                    className="pipeline-step-badge"
+                    style={{ background: item.accent, color: item.color }}
+                    aria-hidden="true"
+                  >
                     {item.icon}
                   </div>
-                  <span className="pipeline-step-num">{item.step}</span>
+                  <h3 className="pipeline-step-title">
+                    <span className="pipeline-step-num">{item.step}</span>
+                    {item.title}
+                  </h3>
                 </div>
 
                 {/* Connector arrow (between cards) */}
@@ -815,10 +986,6 @@ function Pipeline() {
                   </div>
                 )}
 
-                {/* Content */}
-                <h3 style={{ fontSize: 19, fontWeight: 700, marginBottom: 8, color: 'var(--text-heading)' }}>
-                  {item.title}
-                </h3>
                 <p style={{ color: 'var(--text-body)', fontSize: 14, lineHeight: 1.7, marginBottom: 16, flex: 1 }}>
                   {item.desc}
                 </p>
@@ -975,17 +1142,13 @@ function ValueProps() {
                 transition={{ duration: 0.3 }}
                 style={{ '--vc-color': item.color }}
               >
-                {/* Icon */}
-                <div className="value-icon" style={{ background: item.gradient }}>
-                  {item.icon}
+                <div className="value-card-header">
+                  <div className="value-icon" style={{ background: item.gradient }}>
+                    {item.icon}
+                  </div>
+                  <h3 className="value-card-title">{item.title}</h3>
                 </div>
 
-                {/* Title */}
-                <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, color: 'var(--text-heading)' }}>
-                  {item.title}
-                </h3>
-
-                {/* Description */}
                 <p style={{ color: 'var(--text-body)', fontSize: 15, lineHeight: 1.8 }}>
                   {item.desc}
                 </p>
